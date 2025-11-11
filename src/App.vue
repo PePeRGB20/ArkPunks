@@ -133,8 +133,9 @@ provide('getWallet', (): ArkadeWalletInterface | null => {
 })
 
 // Provide reload function to child components
+// Use loadPunksFromLocalStorage() to avoid re-filtering after Nostr sync
 provide('reloadPunks', async () => {
-  await loadPunks()
+  await loadPunksFromLocalStorage()
 })
 
 // All punks from localStorage
@@ -554,7 +555,7 @@ async function transferPunk(punk: PunkState) {
     }
 
     // Reload gallery
-    await loadPunks()
+    await loadPunksFromLocalStorage()
 
     alert(
       `✅ Transfer successful!\n\n` +
@@ -645,7 +646,9 @@ async function listPunk(punk: PunkState) {
 
 // Load punks on mount and on wallet change
 onMounted(async () => {
-  await loadPunks()
+  // Use loadPunksFromLocalStorage() to avoid filtering sold punks
+  // If user did a Nostr sync before, the data is already correct
+  await loadPunksFromLocalStorage()
   updateWalletAddress()
   await loadOfficialPunks()
   await loadMarketplaceListings()
