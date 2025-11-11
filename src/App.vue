@@ -3,8 +3,7 @@
     <header class="app-header">
       <div class="container">
         <h1 class="logo">
-          <img v-if="logoPunkImage" :src="logoPunkImage" alt="ArkPunks" class="logo-icon logo-punk" />
-          <span v-else class="logo-icon">🎨</span>
+          <img src="/logo.svg" alt="ArkPunks" class="logo-icon logo-punk" />
           ArkPunks
         </h1>
         <nav class="nav">
@@ -174,26 +173,6 @@ const samplePunks = computed(() => {
 const officialPunkIds = ref<string[]>([])
 const officialPunksMap = ref<Map<string, number>>(new Map())
 
-// Logo punk image - looking for punk #10c01753...
-const logoPunkImage = computed(() => {
-  // Find punk that starts with 10c01753
-  const logoPunk = allPunks.value.find(p => p.punkId.startsWith('10c01753'))
-  if (!logoPunk?.metadata) return null
-
-  // Generate image without background for logo
-  const imageUrl = logoPunk.metadata.imageUrl
-  if (!imageUrl) return null
-
-  // Replace the background in the SVG with transparent
-  const svgData = atob(imageUrl.split(',')[1])
-  const transparentSvg = svgData.replace(
-    /<rect width="24" height="24" fill="[^"]*" \/>/,
-    '<rect width="24" height="24" fill="transparent" />'
-  )
-
-  return `data:image/svg+xml;base64,${btoa(transparentSvg)}`
-})
-
 // Load all punks from localStorage (with sold punk filtering for normal loads)
 async function loadPunks() {
   try {
@@ -266,17 +245,6 @@ function updateWalletAddress() {
 // Watch for wallet changes
 watch(() => walletConnectRef.value?.getWallet?.()?.address, () => {
   updateWalletAddress()
-})
-
-// Update favicon when logo punk is loaded
-watch(logoPunkImage, (newImage) => {
-  if (newImage) {
-    const link = document.querySelector("link[rel*='icon']") as HTMLLinkElement || document.createElement('link')
-    link.type = 'image/png'
-    link.rel = 'icon'
-    link.href = newImage
-    document.head.appendChild(link)
-  }
 })
 
 // Load official punks list from Nostr

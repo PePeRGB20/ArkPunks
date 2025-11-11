@@ -1,7 +1,7 @@
 /**
  * Generate punk #10c01753 image for logo and favicon
  */
-import { generatePunkImage } from './src/utils/generator'
+import { generatePunkMetadata } from './src/utils/generator'
 import * as fs from 'fs'
 import * as path from 'path'
 
@@ -11,11 +11,16 @@ async function generateLogo() {
   console.log('🎨 Generating logo from punk #10c01753...')
 
   try {
-    // Generate punk image (returns base64 data URL)
-    const imageDataUrl = await generatePunkImage(PUNK_ID)
+    // Generate punk metadata (includes image)
+    const metadata = generatePunkMetadata(PUNK_ID)
+    const imageDataUrl = metadata.imageUrl
 
-    // Extract base64 data
-    const base64Data = imageDataUrl.replace(/^data:image\/png;base64,/, '')
+    // Extract SVG data and make background transparent
+    const svgData = Buffer.from(imageDataUrl.split(',')[1], 'base64').toString('utf-8')
+    const transparentSvg = svgData.replace(
+      /<rect width="24" height="24" fill="[^"]*" \/>/,
+      '<rect width="24" height="24" fill="transparent" />'
+    )
 
     // Create public folder if it doesn't exist
     const publicDir = path.join(process.cwd(), 'public')
@@ -24,14 +29,14 @@ async function generateLogo() {
       console.log('✅ Created public folder')
     }
 
-    // Save as logo.png
-    const logoPath = path.join(publicDir, 'logo.png')
-    fs.writeFileSync(logoPath, Buffer.from(base64Data, 'base64'))
+    // Save as logo.svg
+    const logoPath = path.join(publicDir, 'logo.svg')
+    fs.writeFileSync(logoPath, transparentSvg)
     console.log(`✅ Saved logo to ${logoPath}`)
 
-    // Save as favicon.ico (PNG format is fine, browsers support it)
-    const faviconPath = path.join(publicDir, 'favicon.ico')
-    fs.writeFileSync(faviconPath, Buffer.from(base64Data, 'base64'))
+    // Save as favicon.svg (modern browsers support SVG favicons)
+    const faviconPath = path.join(publicDir, 'favicon.svg')
+    fs.writeFileSync(faviconPath, transparentSvg)
     console.log(`✅ Saved favicon to ${faviconPath}`)
 
     console.log('🎉 Logo and favicon generated successfully!')

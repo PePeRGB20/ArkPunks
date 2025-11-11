@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="240" height="240" style="image-rendering: pixelated;">
+      <!-- Background -->
+      <rect width="24" height="24" fill="transparent" />
+
+      <!-- Mohawk (spiky hair on top) -->
+      
+
+      <!-- Bandana -->
+      
+
+      <!-- Cap/Beanie -->
+      
+
+      <!-- Hair (wild/messy) -->
+      
+
+      <!-- Neck -->
+      <rect x="9" y="17" width="6" height="2" fill="#f5c6a5" opacity="0.8" />
+      <rect x="10" y="18" width="4" height="1" fill="#f5c6a5" opacity="0.6" />
+
+      <!-- Face base (rounded square head shape) -->
+      <rect x="6" y="6" width="12" height="12" rx="3" ry="3" fill="#f5c6a5" />
+
+      <!-- Face shading (add depth) -->
+      <rect x="6.5" y="6.5" width="11" height="11" rx="2.5" ry="2.5" fill="#f5c6a5" opacity="0.9" />
+      <rect x="7" y="7" width="9" height="9" rx="2" ry="2" fill="#fff" opacity="0.05" />
+
+      <!-- Ears -->
+      <rect x="4.5" y="10" width="2" height="3" rx="1" ry="1.5" fill="#f5c6a5" />
+      <rect x="17.5" y="10" width="2" height="3" rx="1" ry="1.5" fill="#f5c6a5" />
+      <rect x="5" y="10.5" width="1" height="2" rx="0.5" ry="1" fill="#f5c6a5" opacity="0.6" />
+      <rect x="18" y="10.5" width="1" height="2" rx="0.5" ry="1" fill="#f5c6a5" opacity="0.6" />
+
+      <!-- Alien special effects -->
+      
+
+      <!-- Zombie special effects -->
+      
+
+      <!-- Ape special effects -->
+      
+
+      <!-- Cheeks (for human types) -->
+      
+      <ellipse cx="8.5" cy="13.5" rx="1.5" ry="1" fill="#ff9999" opacity="0.2" />
+      <ellipse cx="15.5" cy="13.5" rx="1.5" ry="1" fill="#ff9999" opacity="0.2" />
+      
+
+      <!-- Eyebrows (if no hat covering) -->
+      
+      <rect x="8" y="9" width="3" height="0.5" fill="#000" opacity="0.3" />
+      <rect x="13" y="9" width="3" height="0.5" fill="#000" opacity="0.3" />
+      
+
+      <!-- Nose (more defined) -->
+      <ellipse cx="12" cy="13" rx="1" ry="1.5" fill="#000" opacity="0.15" />
+      <rect x="11.5" y="13.5" width="1" height="0.5" fill="#000" opacity="0.2" />
+
+      <!-- Eyes with variations -->
+      
+      <rect x="8" y="10" width="2" height="2" fill="black" />
+      <rect x="14" y="10" width="2" height="2" fill="black" />
+      
+      <rect x="8" y="10" width="1" height="1" fill="white" opacity="0.4" /><rect x="14" y="10" width="1" height="1" fill="white" opacity="0.4" />
+      
+
+      <!-- Mouth -->
+      
+      <ellipse cx="12" cy="15.5" rx="2" ry="0.8" fill="#ff6b8a" opacity="0.5" />
+      <rect x="10.5" y="15" width="3" height="1" fill="#000" opacity="0.2" />
+      
+
+      <!-- Moustache -->
+      
+
+      <!-- Beard -->
+      
+
+      <!-- Smoke -->
+      
+
+      <!-- Earring -->
+      
+
+      <!-- Chain -->
+      
+    </svg>
