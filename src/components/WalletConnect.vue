@@ -74,10 +74,23 @@
     </div>
 
     <div v-else class="wallet-info">
-      <div class="info-header">
-        <h3>Wallet Connected ✅</h3>
-        <button @click="disconnect" class="btn-disconnect">Disconnect</button>
+      <!-- Compact Header -->
+      <div class="wallet-compact-header">
+        <div class="compact-balance" @click="expanded = !expanded">
+          <span class="balance-label">💰</span>
+          <span class="balance-value">{{ formatSats(balance.total) }} sats</span>
+          <span v-if="!expanded" class="expand-hint">({{ possibleMints }} {{ possibleMints === 1 ? 'punk' : 'punks' }}) ▼</span>
+          <span v-else class="expand-hint">▲</span>
+        </div>
+        <button @click="disconnect" class="btn-disconnect-compact">×</button>
       </div>
+
+      <!-- Expanded Details (collapsible) -->
+      <div v-if="expanded" class="wallet-details-expanded"
+        :class="{ 'expanded': expanded }">
+        <div class="info-header">
+          <h3>Wallet Details</h3>
+        </div>
 
       <!-- Funding guide for new wallets -->
       <div v-if="balance.total === 0n" class="funding-guide">
@@ -174,6 +187,8 @@
           💾 Export Wallet
         </button>
       </div>
+      </div>
+      <!-- End expanded details -->
     </div>
   </div>
 </template>
@@ -206,6 +221,7 @@ const showImport = ref(false)
 const importPrivateKey = ref('')
 const importMode = ref<'key' | 'file'>('key')
 const showNostrPubkey = ref(false)
+const expanded = ref(false) // Wallet details collapsed by default
 
 const qrCanvas = ref<HTMLCanvasElement | null>(null)
 const walletAddress = ref('')
@@ -636,8 +652,82 @@ defineExpose({
   background: #1a1a1a;
   border: 2px solid #333;
   border-radius: 8px;
-  padding: 24px;
-  margin-bottom: 24px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+/* Compact Wallet Header */
+.wallet-compact-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.compact-balance {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 8px 12px;
+  background: #2a2a2a;
+  border-radius: 6px;
+  flex: 1;
+  transition: all 0.2s ease;
+}
+
+.compact-balance:hover {
+  background: #333;
+}
+
+.balance-label {
+  font-size: 20px;
+}
+
+.balance-value {
+  color: #ff6b35;
+  font-weight: bold;
+  font-size: 16px;
+}
+
+.expand-hint {
+  color: #888;
+  font-size: 13px;
+  margin-left: auto;
+}
+
+.btn-disconnect-compact {
+  padding: 8px 12px;
+  background: #444;
+  border: none;
+  border-radius: 4px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+  transition: all 0.2s ease;
+}
+
+.btn-disconnect-compact:hover {
+  background: #ef4444;
+}
+
+.wallet-details-expanded {
+  animation: slideDown 0.3s ease;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #333;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 h3 {
