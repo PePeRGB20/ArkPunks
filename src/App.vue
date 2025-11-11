@@ -157,7 +157,7 @@ const samplePunks = computed(() => {
 const officialPunkIds = ref<string[]>([])
 const officialPunksMap = ref<Map<string, number>>(new Map())
 
-// Load all punks from localStorage
+// Load all punks from localStorage (with sold punk filtering for normal loads)
 async function loadPunks() {
   try {
     const punksJson = localStorage.getItem('arkade_punks')
@@ -165,6 +165,7 @@ async function loadPunks() {
       let punks = JSON.parse(punksJson)
 
       // Check if any punks have been sold (for sellers)
+      // This filters punks that were sold on marketplace
       const privateKeyHex = localStorage.getItem('arkade_wallet_private_key')
       if (privateKeyHex) {
         const myPubkey = getPublicKey(hex.decode(privateKeyHex))
@@ -193,6 +194,28 @@ async function loadPunks() {
     }
   } catch (error) {
     console.error('Failed to load punks:', error)
+  }
+}
+
+// Load punks from localStorage WITHOUT filtering (used after Nostr sync)
+// This is needed because syncPunksFromNostr() already handles all ownership logic
+async function loadPunksFromLocalStorage() {
+  try {
+    const punksJson = localStorage.getItem('arkade_punks')
+    if (punksJson) {
+      const punks = JSON.parse(punksJson)
+
+      allPunks.value = punks.map((data: any) => ({
+        punkId: data.punkId,
+        owner: data.owner || '', // Use owner from localStorage
+        // Handle both formats: new (with metadata field) and old (metadata spread at root)
+        metadata: data.metadata || data,
+        listingPrice: 10000n,
+        vtxoOutpoint: data.vtxoOutpoint || `${data.punkId}:0`
+      }))
+    }
+  } catch (error) {
+    console.error('Failed to load punks from localStorage:', error)
   }
 }
 
@@ -303,7 +326,9 @@ async function refreshGallery() {
       console.log(`✅ Synced ${nostrPunks.length} punks from Nostr (${added} added, ${removed} removed phantom punks)`)
     }
 
-    await loadPunks()
+    // Load punks directly from localStorage WITHOUT filtering sold punks
+    // because syncPunksFromNostr() already handles ownership correctly
+    await loadPunksFromLocalStorage()
     await loadMarketplaceListings()
     console.log('✅ Gallery refreshed successfully')
 
