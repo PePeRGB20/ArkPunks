@@ -12,8 +12,15 @@
       <p>No punks for sale yet. Be the first to list one!</p>
     </div>
 
-    <div v-else class="marketplace-grid">
-      <div v-for="punk in listedPunks" :key="punk.punkId" class="marketplace-card">
+    <div v-else>
+      <!-- Pagination info -->
+      <div class="pagination-info">
+        <span>{{ paginationText }}</span>
+      </div>
+
+      <!-- Grid -->
+      <div class="marketplace-grid">
+        <div v-for="punk in paginatedPunks" :key="punk.punkId" class="marketplace-card">
         <div class="punk-image">
           <img :src="punk.metadata.imageUrl" :alt="punk.metadata.name" />
           <div v-if="punk.isOfficial" class="official-badge" title="Official ArkPunk - First 1000 on relay.damus.io">
@@ -66,6 +73,38 @@
             <span>🎨 Your punk</span>
           </div>
         </div>
+        </div>
+      </div>
+
+      <!-- Pagination controls -->
+      <div class="pagination-controls">
+        <button
+          @click="previousPage"
+          :disabled="currentPage === 1"
+          class="btn-pagination"
+        >
+          ← Previous
+        </button>
+
+        <div class="page-numbers">
+          <button
+            v-for="page in visiblePages"
+            :key="page"
+            @click="goToPage(page)"
+            :class="['btn-page', { active: page === currentPage }]"
+            :disabled="page === '...'"
+          >
+            {{ page }}
+          </button>
+        </div>
+
+        <button
+          @click="nextPage"
+          :disabled="currentPage === totalPages"
+          class="btn-pagination"
+        >
+          Next →
+        </button>
       </div>
     </div>
   </div>
@@ -97,6 +136,10 @@ const listedPunks = ref<MarketplaceListing[]>([])
 const loading = ref(true)
 const buying = ref(false)
 
+// Pagination
+const currentPage = ref(1)
+const itemsPerPage = 24
+
 // 1% marketplace fee
 const MARKETPLACE_FEE_PERCENT = 1
 
@@ -125,6 +168,82 @@ function isOwnPunk(punk: MarketplaceListing): boolean {
   return myPubkey === punk.owner
 }
 
+// Pagination computed properties
+const totalPages = computed(() => {
+  return Math.ceil(listedPunks.value.length / itemsPerPage)
+})
+
+const paginatedPunks = computed(() => {
+  const start = (currentPage.value - 1) * itemsPerPage
+  const end = start + itemsPerPage
+  return listedPunks.value.slice(start, end)
+})
+
+const paginationText = computed(() => {
+  const start = (currentPage.value - 1) * itemsPerPage + 1
+  const end = Math.min(currentPage.value * itemsPerPage, listedPunks.value.length)
+  return `Showing ${start}-${end} of ${listedPunks.value.length} punks`
+})
+
+const visiblePages = computed(() => {
+  const total = totalPages.value
+  const current = currentPage.value
+  const pages: (number | string)[] = []
+
+  if (total <= 7) {
+    // Show all pages if 7 or fewer
+    for (let i = 1; i <= total; i++) {
+      pages.push(i)
+    }
+  } else {
+    // Always show first page
+    pages.push(1)
+
+    if (current > 3) {
+      pages.push('...')
+    }
+
+    // Show pages around current page
+    const start = Math.max(2, current - 1)
+    const end = Math.min(total - 1, current + 1)
+
+    for (let i = start; i <= end; i++) {
+      pages.push(i)
+    }
+
+    if (current < total - 2) {
+      pages.push('...')
+    }
+
+    // Always show last page
+    pages.push(total)
+  }
+
+  return pages
+})
+
+// Pagination functions
+function goToPage(page: number | string) {
+  if (typeof page === 'number') {
+    currentPage.value = page
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+}
+
+function nextPage() {
+  if (currentPage.value < totalPages.value) {
+    currentPage.value++
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+}
+
+function previousPage() {
+  if (currentPage.value > 1) {
+    currentPage.value--
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+}
+
 async function loadListings() {
   loading.value = true
   try {
@@ -144,6 +263,9 @@ async function loadListings() {
       isOfficial: officialMap.has(listing.punkId),
       officialIndex: officialMap.get(listing.punkId)
     }))
+
+    // Reset to page 1 when listings are reloaded
+    currentPage.value = 1
   } catch (error) {
     console.error('Failed to load marketplace listings:', error)
   } finally {
@@ -476,5 +598,100 @@ h2 {
   color: #ff6b35;
   font-size: 14px;
   font-weight: 600;
+}
+
+/* Pagination */
+.pagination-info {
+  margin-bottom: 16px;
+  color: #888;
+  font-size: 14px;
+  text-align: center;
+}
+
+.pagination-controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  margin-top: 32px;
+  padding: 24px 0;
+}
+
+.btn-pagination {
+  padding: 10px 20px;
+  background: #2a2a2a;
+  border: 2px solid #444;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-pagination:hover:not(:disabled) {
+  background: #333;
+  border-color: #ff6b35;
+  transform: translateY(-2px);
+}
+
+.btn-pagination:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.page-numbers {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-page {
+  min-width: 40px;
+  height: 40px;
+  padding: 8px;
+  background: #2a2a2a;
+  border: 2px solid #444;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-page:hover:not(:disabled):not(.active) {
+  background: #333;
+  border-color: #ff6b35;
+}
+
+.btn-page.active {
+  background: #ff6b35;
+  border-color: #ff6b35;
+  color: #fff;
+}
+
+.btn-page:disabled {
+  cursor: default;
+  opacity: 0.5;
+  background: transparent;
+  border-color: transparent;
+}
+
+@media (max-width: 768px) {
+  .pagination-controls {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .btn-pagination {
+    padding: 8px 16px;
+    font-size: 12px;
+  }
+
+  .btn-page {
+    min-width: 36px;
+    height: 36px;
+    font-size: 12px;
+  }
 }
 </style>

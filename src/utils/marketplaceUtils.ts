@@ -354,17 +354,48 @@ export async function syncPunksFromNostr(
   const pool = new SimplePool()
 
   try {
-    console.log('🔄 Syncing punks from Nostr for pubkey:', myPubkey.slice(0, 8) + '...')
+    console.log('🔄 Syncing punks from Nostr...')
+    console.log('   Nostr pubkey:', myPubkey.slice(0, 8) + '...')
+    console.log('   Wallet address:', walletAddress)
 
     // Query for all mint events by this user
+    // IMPORTANT: Query both by Nostr pubkey (authors) AND Bitcoin address (owner tag)
+    // This handles cases where Nostr key changed but wallet address stayed the same
     const KIND_PUNK_MINT = 1337
-    const mintEvents = await pool.querySync(RELAYS, {
-      kinds: [KIND_PUNK_MINT],
-      authors: [myPubkey],
-      limit: 1000
-    })
 
-    console.log(`   Found ${mintEvents.length} mint events`)
+    const [mintEventsByAuthor, mintEventsByOwner] = await Promise.all([
+      // Query by Nostr event author (pubkey)
+      pool.querySync(RELAYS, {
+        kinds: [KIND_PUNK_MINT],
+        authors: [myPubkey],
+        limit: 1000
+      }),
+      // Query by owner tag (Bitcoin address)
+      pool.querySync(RELAYS, {
+        kinds: [KIND_PUNK_MINT],
+        '#owner': [walletAddress],
+        limit: 1000
+      })
+    ])
+
+    // Combine and deduplicate by punkId
+    const mintEventsMap = new Map<string, any>()
+    for (const event of [...mintEventsByAuthor, ...mintEventsByOwner]) {
+      const punkIdTag = event.tags.find((t: any) => t[0] === 'punk_id')
+      if (punkIdTag) {
+        const punkId = punkIdTag[1]
+        // Keep earliest event if duplicate
+        const existing = mintEventsMap.get(punkId)
+        if (!existing || event.created_at < existing.created_at) {
+          mintEventsMap.set(punkId, event)
+        }
+      }
+    }
+    const mintEvents = Array.from(mintEventsMap.values())
+
+    console.log(`   Found ${mintEventsByAuthor.length} mint events by Nostr pubkey`)
+    console.log(`   Found ${mintEventsByOwner.length} mint events by wallet address`)
+    console.log(`   Total unique mint events: ${mintEvents.length}`)
 
     // Query for all sold events and transfer events
     const [soldEvents, transferEvents] = await Promise.all([

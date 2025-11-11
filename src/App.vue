@@ -147,11 +147,22 @@ const lastLoggedAddress = ref<string | null>(null) // Track last logged address 
 
 // Filtered punks for current wallet only
 const samplePunks = computed(() => {
-  if (!currentWalletAddress.value) return []
+  console.log('🔍 Gallery Debug:')
+  console.log('   Current wallet address:', currentWalletAddress.value)
+  console.log('   All punks count:', allPunks.value.length)
+  console.log('   All punks:', allPunks.value.map(p => ({ punkId: p.punkId, owner: p.owner })))
 
-  return allPunks.value.filter(punk => {
+  if (!currentWalletAddress.value) {
+    console.log('   ❌ No wallet connected - gallery will be empty')
+    return []
+  }
+
+  const filtered = allPunks.value.filter(punk => {
     return punk.owner === currentWalletAddress.value
   })
+
+  console.log('   ✅ Filtered punks for this wallet:', filtered.length)
+  return filtered
 })
 
 // Official punks list from Nostr authority relay

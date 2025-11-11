@@ -183,6 +183,10 @@
           {{ refreshing ? 'Refreshing...' : '🔄 Refresh' }}
         </button>
 
+        <button @click="runDiagnostics" class="btn btn-diagnostic">
+          🔍 Nostr Diagnostic
+        </button>
+
         <button @click="exportWallet" class="btn btn-export">
           💾 Export Wallet
         </button>
@@ -210,6 +214,7 @@ import { hex } from '@scure/base'
 import QRCode from 'qrcode'
 import { generatePunkImage } from '@/utils/generator'
 import { getPublicKey, nip19 } from 'nostr-tools'
+import { queryAllPunkMints, queryPunksByPubkey, queryPunksByAddress } from '@/utils/nostrDiagnostics'
 
 const config = getActiveConfig()
 const params = getNetworkParams()
@@ -531,6 +536,48 @@ async function copyNostrPubkey() {
   }
 }
 
+async function runDiagnostics() {
+  try {
+    console.log('🔍 Running Nostr diagnostics...')
+    console.log('━'.repeat(60))
+
+    // Get current identity
+    const privateKeyHex = localStorage.getItem('arkade_wallet_private_key')
+    if (!privateKeyHex) {
+      console.error('❌ No private key found')
+      return
+    }
+
+    const pubkeyHex = getPublicKey(hex.decode(privateKeyHex))
+
+    console.log('📋 Your Identity:')
+    console.log('   Nostr pubkey (hex):', pubkeyHex)
+    console.log('   Nostr pubkey (npub):', nip19.npubEncode(pubkeyHex))
+    console.log('   Bitcoin address:', walletAddress.value)
+    console.log('')
+
+    // Query all punks on Nostr
+    const allPunks = await queryAllPunkMints()
+    console.log('')
+
+    if (allPunks.length > 0) {
+      // Query punks for this specific user
+      console.log('━'.repeat(60))
+      await queryPunksByPubkey(pubkeyHex)
+      console.log('')
+      await queryPunksByAddress(walletAddress.value)
+    }
+
+    console.log('━'.repeat(60))
+    console.log('✅ Diagnostic complete - check console output above')
+
+    alert(`🔍 Nostr Diagnostic Complete!\n\nFound ${allPunks.length} total punks on Nostr.\n\nCheck the browser console (F12) for detailed analysis.`)
+  } catch (error) {
+    console.error('❌ Diagnostic failed:', error)
+    alert('Diagnostic failed. Check console for details.')
+  }
+}
+
 async function copyBoardingAddress() {
   if (!boardingAddress.value) return
 
@@ -790,6 +837,24 @@ h3 {
 .btn-export:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(118, 75, 162, 0.4);
+}
+
+.btn-diagnostic {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: #fff;
+  border: 2px solid #d97706;
+  padding: 12px 24px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: bold;
+  transition: all 0.2s;
+  width: 100%;
+}
+
+.btn-diagnostic:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(217, 119, 6, 0.4);
 }
 
 .btn:disabled {
