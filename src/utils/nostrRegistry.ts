@@ -29,6 +29,7 @@ const RELAYS = [
 
 // Event kinds
 const KIND_PUNK_MINT = 1337      // Individual punk mint
+const KIND_PUNK_EXIT = 1341      // L1 exit event (punk → Bitcoin address)
 const KIND_PUNK_REGISTRY = 30333 // Global supply registry (replaceable)
 
 // Global pool
@@ -210,6 +211,105 @@ export async function getPunksByOwner(owner: string): Promise<NostrEvent[]> {
     return events
   } catch (error) {
     console.error('Failed to fetch punks by owner:', error)
+    return []
+  }
+}
+
+/**
+ * Publish L1 exit event to Nostr
+ * Links a punk to a Bitcoin L1 address before exiting Arkade
+ * This ensures the punk can be recovered even after converting VTXO → UTXO
+ */
+export async function publishPunkL1Exit(
+  punkId: string,
+  fromVtxo: string,
+  toBitcoinAddress: string,
+  compressedData: string,
+  privateKey: Uint8Array,
+  exitType: 'unilateral' | 'collaborative' = 'unilateral'
+): Promise<boolean> {
+  try {
+    console.log('📡 Publishing L1 exit event to Nostr...')
+    console.log('   Punk ID:', punkId)
+    console.log('   From VTXO:', fromVtxo)
+    console.log('   To L1 Address:', toBitcoinAddress)
+    console.log('   Exit Type:', exitType)
+
+    // Create exit event
+    const eventTemplate: EventTemplate = {
+      kind: KIND_PUNK_EXIT,
+      created_at: Math.floor(Date.now() / 1000),
+      tags: [
+        ['t', 'arkade-punk-exit'],      // Tag for filtering
+        ['t', 'bitcoin'],                // Bitcoin tag
+        ['punk_id', punkId],             // Punk identifier
+        ['from_vtxo', fromVtxo],         // Source VTXO
+        ['to_address', toBitcoinAddress], // Destination L1 address
+        ['data', compressedData],        // 6-byte compressed metadata
+        ['exit_type', exitType],         // Exit type
+        ['network', 'mainnet'],          // Network
+      ],
+      content: `ArkPunk exiting to Bitcoin L1 🟠\n\nPunk ID: ${punkId}\nVTXO: ${fromVtxo}\nL1 Address: ${toBitcoinAddress}\n\nThis punk is now linked to a Bitcoin UTXO and can be recovered using this Nostr key.`
+    }
+
+    // Sign event
+    const pubkey = getPublicKey(privateKey)
+    const signedEvent = finalizeEvent(eventTemplate, privateKey)
+
+    console.log('   Event signed, publishing to relays...')
+    console.log('   Pubkey:', pubkey)
+
+    // Publish to all relays
+    const promises = pool.publish(RELAYS, signedEvent)
+    const results = await Promise.allSettled(promises)
+
+    const successful = results.filter(r => r.status === 'fulfilled').length
+    const failed = results.filter(r => r.status === 'rejected').length
+
+    console.log(`✅ Published L1 exit to ${successful}/${RELAYS.length} relays`)
+    if (failed > 0) {
+      console.warn(`⚠️ Failed to publish to ${failed} relays`)
+    }
+
+    return successful > 0
+  } catch (error) {
+    console.error('❌ Failed to publish L1 exit to Nostr:', error)
+    return false
+  }
+}
+
+/**
+ * Get all L1 exit events for a specific punk
+ */
+export async function getPunkL1Exits(punkId: string): Promise<NostrEvent[]> {
+  try {
+    const events = await pool.querySync(RELAYS, {
+      kinds: [KIND_PUNK_EXIT],
+      '#punk_id': [punkId],
+      limit: 10
+    })
+
+    return events.sort((a, b) => b.created_at - a.created_at) // Latest first
+  } catch (error) {
+    console.error('Failed to fetch L1 exits:', error)
+    return []
+  }
+}
+
+/**
+ * Get all punks exited to a specific Bitcoin L1 address
+ */
+export async function getPunksByL1Address(address: string): Promise<NostrEvent[]> {
+  try {
+    const events = await pool.querySync(RELAYS, {
+      kinds: [KIND_PUNK_EXIT],
+      '#to_address': [address],
+      limit: 100
+    })
+
+    return events
+  } catch (error) {
+    console.error('Failed to fetch punks by L1 address:', error)
     return []
   }
 }

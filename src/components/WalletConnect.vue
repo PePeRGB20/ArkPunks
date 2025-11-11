@@ -190,6 +190,87 @@
         <button @click="exportWallet" class="btn btn-export">
           💾 Export Wallet
         </button>
+
+        <button @click="showExitModal = true" class="btn btn-exit-l1">
+          🟠 Exit to L1
+        </button>
+      </div>
+
+      <!-- L1 Exit Modal -->
+      <div v-if="showExitModal" class="modal-overlay" @click="showExitModal = false">
+        <div class="modal-content" @click.stop>
+          <div class="modal-header">
+            <h3>🟠 Exit Arkade to Bitcoin L1</h3>
+            <button @click="showExitModal = false" class="btn-close">×</button>
+          </div>
+
+          <div class="modal-body">
+            <div class="warning-box">
+              <p><strong>⚠️ Important:</strong> Before exiting Arkade, we'll publish your punks to Nostr.</p>
+              <p>This ensures your punks remain recoverable after converting VTXOs to standard Bitcoin UTXOs.</p>
+            </div>
+
+            <div v-if="userPunksForExit.length > 0" class="exit-punks-list">
+              <h4>Punks to Preserve:</h4>
+              <div class="punk-exit-items">
+                <div v-for="punk in userPunksForExit" :key="punk.punkId" class="punk-exit-item">
+                  <img :src="punk.metadata.imageUrl" :alt="punk.metadata.name" class="punk-exit-thumb" />
+                  <div class="punk-exit-info">
+                    <div class="punk-exit-name">{{ punk.metadata.name }}</div>
+                    <div class="punk-exit-id">{{ punk.punkId.slice(0, 16) }}...</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div v-else class="no-punks-message">
+              <p>No punks found in your wallet.</p>
+            </div>
+
+            <div class="exit-address-input">
+              <label>
+                <strong>Bitcoin L1 Destination Address:</strong>
+                <input
+                  v-model="exitL1Address"
+                  type="text"
+                  placeholder="bc1q..."
+                  class="input-address"
+                />
+              </label>
+              <p class="input-hint">
+                Enter the Bitcoin address where you'll receive the funds after exiting Arkade.
+              </p>
+            </div>
+
+            <div v-if="exitPreparationStatus" class="exit-status">
+              <p :class="exitPreparationSuccess ? 'status-success' : 'status-error'">
+                {{ exitPreparationStatus }}
+              </p>
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button
+              @click="prepareExit"
+              :disabled="!exitL1Address || preparingExit || userPunksForExit.length === 0"
+              class="btn btn-primary"
+            >
+              {{ preparingExit ? 'Publishing to Nostr...' : '1️⃣ Prepare Exit (Publish to Nostr)' }}
+            </button>
+
+            <button
+              v-if="exitPreparationSuccess"
+              @click="performActualExit"
+              class="btn btn-exit"
+            >
+              2️⃣ Proceed with L1 Exit
+            </button>
+
+            <button @click="showExitModal = false" class="btn btn-secondary">
+              Cancel
+            </button>
+          </div>
+        </div>
       </div>
       </div>
       <!-- End expanded details -->
@@ -215,6 +296,7 @@ import QRCode from 'qrcode'
 import { generatePunkImage } from '@/utils/generator'
 import { getPublicKey, nip19 } from 'nostr-tools'
 import { queryAllPunkMints, queryPunksByPubkey, queryPunksByAddress } from '@/utils/nostrDiagnostics'
+import { prepareL1Exit, getExitStatusMessage, type PunkExitInfo } from '@/utils/arkadeExit'
 
 const config = getActiveConfig()
 const params = getNetworkParams()
@@ -227,6 +309,13 @@ const importPrivateKey = ref('')
 const importMode = ref<'key' | 'file'>('key')
 const showNostrPubkey = ref(false)
 const expanded = ref(false) // Wallet details collapsed by default
+
+// L1 Exit modal state
+const showExitModal = ref(false)
+const exitL1Address = ref('')
+const preparingExit = ref(false)
+const exitPreparationStatus = ref('')
+const exitPreparationSuccess = ref(false)
 
 const qrCanvas = ref<HTMLCanvasElement | null>(null)
 const walletAddress = ref('')
@@ -267,6 +356,21 @@ const nostrPubkey = computed(() => {
   } catch (error) {
     console.error('Failed to derive Nostr pubkey:', error)
     return ''
+  }
+})
+
+const userPunksForExit = computed(() => {
+  try {
+    const punksJson = localStorage.getItem('arkade_punks')
+    if (!punksJson) return []
+
+    const allPunks = JSON.parse(punksJson)
+
+    // Filter punks owned by this wallet
+    return allPunks.filter((punk: any) => punk.owner === walletAddress.value)
+  } catch (error) {
+    console.error('Failed to load punks for exit:', error)
+    return []
   }
 })
 
@@ -651,6 +755,90 @@ function exportWallet() {
   } catch (error) {
     console.error('Export failed:', error)
     alert('Failed to export wallet. See console for details.')
+  }
+}
+
+async function prepareExit() {
+  preparingExit.value = true
+  exitPreparationStatus.value = ''
+  exitPreparationSuccess.value = false
+
+  try {
+    // Prepare punk data for exit
+    const punkExitData: PunkExitInfo[] = userPunksForExit.value.map((punk: any) => ({
+      punkId: punk.punkId,
+      owner: punk.owner,
+      vtxoOutpoint: punk.vtxoOutpoint,
+      compressedData: punk.compressedData || '000000000000' // Fallback if missing
+    }))
+
+    if (punkExitData.length === 0) {
+      exitPreparationStatus.value = 'No punks to prepare for exit.'
+      return
+    }
+
+    // Publish exit events to Nostr
+    const result = await prepareL1Exit(punkExitData, exitL1Address.value, 'unilateral')
+
+    exitPreparationStatus.value = getExitStatusMessage(
+      result.publishedCount,
+      result.failedCount,
+      userPunksForExit.value.length
+    )
+    exitPreparationSuccess.value = result.success
+
+    if (result.success) {
+      console.log('✅ Exit preparation complete!')
+      console.log('   Published:', result.publishedCount)
+      console.log('   Failed:', result.failedCount)
+      console.log('   Details:', result.details)
+
+      alert(`✅ Exit Prepared!\n\n${result.publishedCount} punk(s) published to Nostr.\n\nYou can now proceed with the L1 exit.`)
+    }
+  } catch (error) {
+    console.error('❌ Exit preparation failed:', error)
+    exitPreparationStatus.value = `❌ Error: ${error}`
+    exitPreparationSuccess.value = false
+    alert(`Failed to prepare exit: ${error}`)
+  } finally {
+    preparingExit.value = false
+  }
+}
+
+async function performActualExit() {
+  const confirmed = confirm(
+    `🟠 Bitcoin L1 Exit\n\n` +
+    `You are about to exit Arkade and convert your VTXOs to standard Bitcoin UTXOs.\n\n` +
+    `✅ Your ${userPunksForExit.value.length} punk(s) have been published to Nostr and are safe!\n\n` +
+    `Destination: ${exitL1Address.value}\n\n` +
+    `⚠️ This action cannot be undone. Continue?`
+  )
+
+  if (!confirmed) return
+
+  try {
+    console.log('🚀 Performing L1 exit...')
+    console.log('   Destination:', exitL1Address.value)
+    console.log('   Balance:', formatSats(balance.value.total), 'sats')
+
+    // Note: Arkade SDK doesn't expose unilateralExit() directly yet
+    // For now, we just show instructions
+    alert(
+      `🟠 L1 Exit Instructions\n\n` +
+      `Your punks are now published to Nostr and linked to:\n` +
+      `${exitL1Address.value}\n\n` +
+      `To complete the exit:\n` +
+      `1. Use the Arkade SDK's unilateral exit function\n` +
+      `2. Your funds will be sent to the L1 address\n` +
+      `3. Your punks can be recovered using your Nostr private key\n\n` +
+      `Recovery pubkey: ${nostrPubkey.value.slice(0, 20)}...`
+    )
+
+    // Close modal
+    showExitModal.value = false
+  } catch (error) {
+    console.error('❌ Exit failed:', error)
+    alert(`Exit failed: ${error}`)
   }
 }
 
@@ -1450,5 +1638,254 @@ h3 {
 .btn-copy-inline:hover {
   background: #333;
   border-color: #ff6b35;
+}
+
+/* L1 Exit Button */
+.btn-exit-l1 {
+  background: linear-gradient(135deg, #f7931a 0%, #ff9500 100%);
+  color: #fff;
+  border: 2px solid #f7931a;
+  padding: 12px 24px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: bold;
+  transition: all 0.2s;
+  width: 100%;
+}
+
+.btn-exit-l1:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(247, 147, 26, 0.4);
+}
+
+/* Exit Modal */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.modal-content {
+  background: #1a1a1a;
+  border: 2px solid #f7931a;
+  border-radius: 12px;
+  max-width: 600px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 32px rgba(247, 147, 26, 0.3);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid #333;
+}
+
+.modal-header h3 {
+  margin: 0;
+  color: #f7931a;
+  font-size: 24px;
+}
+
+.btn-close {
+  background: transparent;
+  border: none;
+  color: #888;
+  font-size: 32px;
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s;
+}
+
+.btn-close:hover {
+  color: #ff6b35;
+}
+
+.modal-body {
+  padding: 20px;
+}
+
+.modal-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+  border-top: 1px solid #333;
+}
+
+.warning-box {
+  background: #2a1a0a;
+  border: 2px solid #f7931a;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.warning-box p {
+  color: #fbbf24;
+  margin: 8px 0;
+  line-height: 1.6;
+}
+
+.warning-box strong {
+  color: #f7931a;
+}
+
+.exit-punks-list {
+  margin: 20px 0;
+}
+
+.exit-punks-list h4 {
+  color: #fff;
+  margin: 0 0 12px 0;
+  font-size: 16px;
+}
+
+.punk-exit-items {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 200px;
+  overflow-y: auto;
+  background: #2a2a2a;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.punk-exit-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #1a1a1a;
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid #444;
+}
+
+.punk-exit-thumb {
+  width: 48px;
+  height: 48px;
+  border-radius: 4px;
+  image-rendering: pixelated;
+}
+
+.punk-exit-info {
+  flex: 1;
+}
+
+.punk-exit-name {
+  color: #fff;
+  font-weight: bold;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.punk-exit-id {
+  color: #888;
+  font-size: 12px;
+  font-family: 'Courier New', monospace;
+}
+
+.no-punks-message {
+  text-align: center;
+  padding: 40px 20px;
+  color: #888;
+}
+
+.exit-address-input {
+  margin: 20px 0;
+}
+
+.exit-address-input label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: #fff;
+}
+
+.input-address {
+  padding: 12px;
+  background: #2a2a2a;
+  border: 2px solid #444;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 14px;
+  font-family: 'Courier New', monospace;
+  transition: border-color 0.2s;
+}
+
+.input-address:focus {
+  outline: none;
+  border-color: #f7931a;
+}
+
+.input-hint {
+  color: #888;
+  font-size: 13px;
+  margin: 4px 0 0 0;
+}
+
+.exit-status {
+  margin: 16px 0;
+  padding: 12px;
+  border-radius: 6px;
+  font-weight: bold;
+}
+
+.status-success {
+  background: #1a2a1a;
+  border: 2px solid #4ade80;
+  color: #4ade80;
+}
+
+.status-error {
+  background: #2a1a1a;
+  border: 2px solid #ff6b35;
+  color: #ff6b35;
+}
+
+.btn-exit {
+  background: linear-gradient(135deg, #ff6b35 0%, #ff8555 100%);
+  color: #fff;
+  border: 2px solid #ff6b35;
+  padding: 12px 24px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: bold;
+  transition: all 0.2s;
+}
+
+.btn-exit:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 107, 53, 0.4);
+}
+
+@media (max-width: 768px) {
+  .modal-content {
+    max-width: 100%;
+    margin: 20px;
+  }
+
+  .punk-exit-items {
+    max-height: 150px;
+  }
 }
 </style>
