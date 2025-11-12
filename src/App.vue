@@ -94,7 +94,7 @@
       <div class="container">
         <p>
           Built with ❤️ by <strong>PPRGB20</strong> on Bitcoin using
-          <a href="https://docs.arkadeos.com" target="_blank">Arkade Protocol</a>
+          <a href="https://docs.arkadeos.com" target="_blank">ArkadeOS SDK</a>
         </p>
         <p class="disclaimer">
           ⚠️ Alpha software - you can loose your funds, don't put too much in this silly game
