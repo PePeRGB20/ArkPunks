@@ -936,31 +936,33 @@ h2 {
 /* Mobile responsive */
 @media (max-width: 768px) {
   .countdown-container {
-    padding: 24px 16px;
+    padding: 20px 12px;
   }
 
   .countdown-container h3 {
-    font-size: 24px;
+    font-size: 20px;
   }
 
   .launch-date {
-    font-size: 14px;
+    font-size: 13px;
+    margin-bottom: 24px;
   }
 
   .countdown-timer {
-    gap: 12px;
+    gap: 8px;
+    max-width: 100%;
   }
 
   .time-block {
-    padding: 16px 8px;
+    padding: 12px 6px;
   }
 
   .time-value {
-    font-size: 32px;
+    font-size: 28px;
   }
 
   .time-label {
-    font-size: 11px;
+    font-size: 10px;
   }
 
   .launch-info {
@@ -969,6 +971,54 @@ h2 {
 
   .launch-info p {
     font-size: 14px;
+  }
+}
+
+/* Extra small screens */
+@media (max-width: 480px) {
+  .countdown-container {
+    padding: 16px 8px;
+  }
+
+  .countdown-container h3 {
+    font-size: 18px;
+    line-height: 1.2;
+  }
+
+  .launch-date {
+    font-size: 12px;
+    margin-bottom: 20px;
+  }
+
+  .countdown-timer {
+    gap: 6px;
+  }
+
+  .time-block {
+    padding: 10px 4px;
+    border-width: 1px;
+  }
+
+  .time-value {
+    font-size: 24px;
+  }
+
+  .time-label {
+    font-size: 9px;
+  }
+
+  .launch-info {
+    padding: 12px;
+    margin-top: 20px;
+  }
+
+  .launch-info p {
+    font-size: 13px;
+    margin: 6px 0;
+  }
+
+  .launch-info p strong {
+    font-size: 15px;
   }
 }
 </style>
