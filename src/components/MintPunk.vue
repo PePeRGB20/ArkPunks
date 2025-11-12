@@ -2,8 +2,42 @@
   <div class="mint-punk">
     <h2>Mint a New Punk</h2>
 
-    <!-- Supply Counter -->
-    <div class="supply-counter">
+    <!-- Launch Countdown (shown before launch) -->
+    <div v-if="!isLaunched" class="launch-countdown">
+      <div class="countdown-container">
+        <h3>🚀 Official Launch Countdown</h3>
+        <p class="launch-date">November 20, 2025 at 12:00 CET</p>
+
+        <div class="countdown-timer">
+          <div class="time-block">
+            <span class="time-value">{{ countdown.days }}</span>
+            <span class="time-label">Days</span>
+          </div>
+          <div class="time-block">
+            <span class="time-value">{{ countdown.hours }}</span>
+            <span class="time-label">Hours</span>
+          </div>
+          <div class="time-block">
+            <span class="time-value">{{ countdown.minutes }}</span>
+            <span class="time-label">Minutes</span>
+          </div>
+          <div class="time-block">
+            <span class="time-value">{{ countdown.seconds }}</span>
+            <span class="time-label">Seconds</span>
+          </div>
+        </div>
+
+        <div class="launch-info">
+          <p><strong>Get Ready!</strong></p>
+          <p>✓ Create your wallet now</p>
+          <p>✓ Fund it with Bitcoin</p>
+          <p>✓ Be ready to mint one of the first 1,000 Official ArkPunks!</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Supply Counter (shown after launch) -->
+    <div v-else class="supply-counter">
       <div class="counter-bar">
         <div class="counter-fill" :style="{ width: supplyPercentage + '%' }"></div>
       </div>
@@ -16,7 +50,7 @@
 
     <div class="mint-form">
       <!-- Blind Mint Info -->
-      <div v-if="!mintedPunk && !minting" class="blind-mint-info">
+      <div v-if="!mintedPunk && !minting && isLaunched" class="blind-mint-info">
         <div class="mystery-box">
           <div class="mystery-icon">📦</div>
           <h3>Blind Mint</h3>
@@ -131,7 +165,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, inject, onMounted } from 'vue'
+import { ref, computed, inject, onMounted, onUnmounted } from 'vue'
 import { generatePunkFromTxid, calculateRarityScore } from '@/utils/generator'
 import { compressPunkMetadata } from '@/utils/compression'
 import { PunkMetadata, MintEvent } from '@/types/punk'
@@ -146,9 +180,62 @@ import {
 } from '@/utils/punkRegistry'
 import { publishPunkMint } from '@/utils/nostrRegistry'
 import { loadIdentity } from '@/utils/arkadeWallet'
+import { PUNK_SUPPLY_CONFIG } from '@/config/arkade'
 
 // Inject wallet from parent (App.vue)
 const wallet = inject<() => ArkadeWalletInterface | null>('getWallet')
+
+// Launch date configuration
+const LAUNCH_DATE = new Date(PUNK_SUPPLY_CONFIG.LAUNCH_DATE).getTime()
+const MINT_ENABLED = PUNK_SUPPLY_CONFIG.MINT_ENABLED
+
+// Countdown state
+const countdown = ref({
+  days: 0,
+  hours: 0,
+  minutes: 0,
+  seconds: 0
+})
+
+const isLaunched = computed(() => {
+  return MINT_ENABLED || Date.now() >= LAUNCH_DATE
+})
+
+let countdownInterval: number | null = null
+
+function updateCountdown() {
+  const now = Date.now()
+  const diff = LAUNCH_DATE - now
+
+  if (diff <= 0) {
+    countdown.value = { days: 0, hours: 0, minutes: 0, seconds: 0 }
+    if (countdownInterval) {
+      clearInterval(countdownInterval)
+      countdownInterval = null
+    }
+    return
+  }
+
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24))
+  const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
+  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
+  const seconds = Math.floor((diff % (1000 * 60)) / 1000)
+
+  countdown.value = { days, hours, minutes, seconds }
+}
+
+onMounted(() => {
+  updateCountdown()
+  if (!isLaunched.value) {
+    countdownInterval = window.setInterval(updateCountdown, 1000)
+  }
+})
+
+onUnmounted(() => {
+  if (countdownInterval) {
+    clearInterval(countdownInterval)
+  }
+})
 
 const punkValue = ref(10000) // Default 10000 sats (mainnet minimum)
 const minting = ref(false)
@@ -761,5 +848,127 @@ h2 {
 .sold-out-message p:first-child {
   font-size: 20px;
   color: #fff;
+}
+
+/* Launch Countdown Styles */
+.launch-countdown {
+  margin: 32px 0;
+}
+
+.countdown-container {
+  background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%);
+  border: 2px solid #ff6b35;
+  border-radius: 12px;
+  padding: 40px 20px;
+  text-align: center;
+  box-shadow: 0 8px 32px rgba(255, 107, 53, 0.3);
+}
+
+.countdown-container h3 {
+  font-size: 32px;
+  margin: 0 0 12px 0;
+  color: #fff;
+  background: linear-gradient(45deg, #ff6b35, #ff8555);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.launch-date {
+  font-size: 18px;
+  color: #aaa;
+  margin: 0 0 32px 0;
+  font-weight: 500;
+}
+
+.countdown-timer {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+  max-width: 600px;
+  margin: 0 auto 32px auto;
+}
+
+.time-block {
+  background: #0a0a0a;
+  border: 2px solid #333;
+  border-radius: 8px;
+  padding: 20px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.time-value {
+  font-size: 48px;
+  font-weight: bold;
+  color: #ff6b35;
+  line-height: 1;
+}
+
+.time-label {
+  font-size: 14px;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.launch-info {
+  background: rgba(255, 107, 53, 0.1);
+  border: 1px solid rgba(255, 107, 53, 0.3);
+  border-radius: 8px;
+  padding: 24px;
+  max-width: 500px;
+  margin: 0 auto;
+}
+
+.launch-info p {
+  margin: 8px 0;
+  color: #ccc;
+  font-size: 16px;
+}
+
+.launch-info p strong {
+  color: #ff6b35;
+  font-size: 18px;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .countdown-container {
+    padding: 24px 16px;
+  }
+
+  .countdown-container h3 {
+    font-size: 24px;
+  }
+
+  .launch-date {
+    font-size: 14px;
+  }
+
+  .countdown-timer {
+    gap: 12px;
+  }
+
+  .time-block {
+    padding: 16px 8px;
+  }
+
+  .time-value {
+    font-size: 32px;
+  }
+
+  .time-label {
+    font-size: 11px;
+  }
+
+  .launch-info {
+    padding: 16px;
+  }
+
+  .launch-info p {
+    font-size: 14px;
+  }
 }
 </style>
