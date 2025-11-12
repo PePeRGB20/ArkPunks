@@ -1887,5 +1887,30 @@ h3 {
   .punk-exit-items {
     max-height: 150px;
   }
+
+  /* Compact wallet action buttons for mobile */
+  .wallet-actions {
+    gap: 8px;
+  }
+
+  .wallet-actions .btn {
+    padding: 10px 12px;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+}
+
+/* Extra small screens - stack buttons in 2x2 grid */
+@media (max-width: 480px) {
+  .wallet-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .wallet-actions .btn {
+    padding: 12px 8px;
+    font-size: 12px;
+  }
 }
 </style>
