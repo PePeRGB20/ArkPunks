@@ -134,6 +134,7 @@ interface Sale {
   punkIndex?: number
   price: bigint
   buyer: string
+  seller: string
   timestamp: number
 }
 

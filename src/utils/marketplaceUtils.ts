@@ -259,6 +259,7 @@ export async function delistPunk(
 export async function publishPunkSold(
   punkId: string,
   sellerPubkey: string,
+  price: string,
   txid: string,
   privateKey: string
 ): Promise<boolean> {
@@ -275,9 +276,10 @@ export async function publishPunkSold(
         ['punk_id', punkId],
         ['seller', sellerPubkey],
         ['buyer', buyerPubkey],
+        ['price', price],
         ['txid', txid]
       ],
-      content: `Punk ${punkId} sold to ${buyerPubkey.slice(0, 8)}...`
+      content: `Punk ${punkId} sold to ${buyerPubkey.slice(0, 8)}... for ${price} sats`
     }
 
     const signedEvent = finalizeEvent(eventTemplate, hex.decode(privateKey))

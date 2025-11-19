@@ -318,7 +318,7 @@ async function buyPunk(punk: MarketplaceListing) {
     const privateKeyHex = localStorage.getItem('arkade_wallet_private_key')
     if (privateKeyHex) {
       try {
-        await publishPunkSold(punk.punkId, punk.owner, txid, privateKeyHex)
+        await publishPunkSold(punk.punkId, punk.owner, punk.listingPrice.toString(), txid, privateKeyHex)
       } catch (publishError) {
         console.error('Failed to publish sold event:', publishError)
         // Don't fail the entire purchase if sold event fails

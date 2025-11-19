@@ -422,7 +422,7 @@ export async function getPunksByL1Address(address: string): Promise<NostrEvent[]
 
 /**
  * Get sales history from Nostr
- * Fetches all punk buy events and returns them sorted by timestamp (newest first)
+ * Fetches all punk sold events (kind 1339) and returns them sorted by timestamp (newest first)
  */
 export async function getSalesHistory(): Promise<Array<{
   id: string
@@ -430,28 +430,36 @@ export async function getSalesHistory(): Promise<Array<{
   punkIndex?: number
   price: bigint
   buyer: string
+  seller: string
   timestamp: number
 }>> {
   try {
     console.log('📊 Fetching sales history from Nostr...')
 
-    // Fetch all buy events (these are marketplace purchases)
+    const KIND_PUNK_SOLD = 1339
+
+    // Fetch all sold events
     const events = await pool.querySync(RELAYS, {
-      kinds: [32001], // PUNK_KIND for marketplace events
-      '#p': ['buy'],  // Filter for buy events
-      limit: 500      // Get last 500 sales
+      kinds: [KIND_PUNK_SOLD],
+      limit: 500 // Get last 500 sales
     })
 
-    console.log(`   Found ${events.length} buy events`)
+    console.log(`   Found ${events.length} sold events`)
 
     const sales = events
       .map(event => {
         try {
-          const content = JSON.parse(event.content)
+          // Extract data from tags
+          const punkIdTag = event.tags.find(t => t[0] === 'punk_id')
+          const sellerTag = event.tags.find(t => t[0] === 'seller')
+          const buyerTag = event.tags.find(t => t[0] === 'buyer')
+          const priceTag = event.tags.find(t => t[0] === 'price')
 
-          // Extract punk ID and price from tags or content
-          const punkIdTag = event.tags.find(t => t[0] === 'punk')
-          const punkId = punkIdTag?.[1] || content.punkId
+          if (!punkIdTag || !buyerTag) {
+            return null
+          }
+
+          const punkId = punkIdTag[1]
 
           // Try to extract mint index if available
           const punkIndexMatch = punkId?.match(/#(\d+)/)
@@ -459,14 +467,15 @@ export async function getSalesHistory(): Promise<Array<{
 
           return {
             id: event.id,
-            punkId: punkId || 'unknown',
+            punkId,
             punkIndex,
-            price: BigInt(content.price || content.salePrice || 0),
-            buyer: content.newOwner || content.buyer || event.pubkey,
+            price: priceTag ? BigInt(priceTag[1]) : 0n,
+            buyer: buyerTag[1],
+            seller: sellerTag ? sellerTag[1] : 'unknown',
             timestamp: event.created_at * 1000 // Convert to milliseconds
           }
         } catch (error) {
-          console.warn('Failed to parse buy event:', error)
+          console.warn('Failed to parse sold event:', error)
           return null
         }
       })
