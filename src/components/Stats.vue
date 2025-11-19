@@ -822,14 +822,76 @@ h2 {
 }
 
 @media (max-width: 768px) {
+  .stats-container {
+    padding: 16px;
+  }
+
+  h2 {
+    font-size: 24px;
+    margin-bottom: 4px;
+  }
+
+  .subtitle {
+    font-size: 14px;
+    margin-bottom: 20px;
+  }
+
   .stats-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+
+  .stat-card {
+    padding: 12px;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 8px;
+  }
+
+  .stat-icon {
+    font-size: 24px;
+  }
+
+  .stat-label {
+    font-size: 11px;
+    margin-bottom: 4px;
+  }
+
+  .stat-value {
+    font-size: 16px;
+  }
+
+  .stat-hint {
+    font-size: 11px;
+  }
+
+  .sales-history {
+    padding: 16px;
+  }
+
+  .section-header {
+    flex-direction: column;
+    gap: 12px;
+    align-items: stretch;
+    margin-bottom: 16px;
+  }
+
+  .section-header h3 {
+    font-size: 18px;
+  }
+
+  .btn-refresh {
+    width: 100%;
+    padding: 10px;
   }
 
   .table-header,
   .table-row {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1.5fr 1fr;
     gap: 8px;
+    padding: 12px;
   }
 
   .col-buyer,
@@ -837,27 +899,63 @@ h2 {
     display: none;
   }
 
-  .stat-card {
-    padding: 16px;
+  .punk-id {
+    font-size: 14px;
   }
 
-  .stat-value {
-    font-size: 20px;
+  .price-badge {
+    padding: 4px 8px;
+    font-size: 12px;
+  }
+
+  .table-header {
+    font-size: 11px;
+  }
+
+  .pagination {
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 16px;
+    padding-top: 16px;
+  }
+
+  .btn-page {
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+
+  .page-info {
+    font-size: 13px;
+    width: 100%;
+    text-align: center;
   }
 
   .punk-detail {
     grid-template-columns: 1fr;
-    padding: 24px;
+    padding: 20px;
+    gap: 20px;
   }
 
   .punk-image-large {
     width: 100%;
     height: auto;
     aspect-ratio: 1;
+    max-width: 280px;
+    margin: 0 auto;
+  }
+
+  .punk-info-detail h3 {
+    font-size: 22px;
   }
 
   .modal-content {
     width: 95%;
+  }
+
+  .modal-close {
+    width: 32px;
+    height: 32px;
+    font-size: 20px;
   }
 }
 </style>
