@@ -439,6 +439,16 @@ export async function getSalesHistory(): Promise<Array<{
 
     const KIND_PUNK_SOLD = 1339
 
+    // Blacklist of test/legacy punk IDs to exclude from sales history
+    // These are old test punks without proper mint events
+    const BLACKLISTED_PUNKS = new Set([
+      'f6536903d53c0c0cfb753f59efadfacfb92da67c5b47a5150b1c1b9460730b92',
+      '10c01753dd988e84e901b34a09477d7c30218c40ac8b57c5c3acd9099dbd44f0',
+      '59c1cf86421f345a2d20d3caf0959edae947af6a30477b37bb8fc020b3f4a6c4',
+      '36baf153b4b7fb3b37a2627e11b14bd0b82f2d26fc9d29084b1a56df8c89e58a',
+      '852e944f57a64febd1a24a9e9815b8ba5e751e4dc6a1f8a7c72e88d90d90dd4a'
+    ])
+
     // Fetch all sold events
     const events = await pool.querySync(RELAYS, {
       kinds: [KIND_PUNK_SOLD],
@@ -493,6 +503,12 @@ export async function getSalesHistory(): Promise<Array<{
           }
 
           const punkId = punkIdTag[1]
+
+          // Skip blacklisted test/legacy punks
+          if (BLACKLISTED_PUNKS.has(punkId)) {
+            console.log(`   ⏭️  Skipping blacklisted test punk: ${punkId.slice(0, 16)}...`)
+            return null
+          }
 
           // Skip sales for punks without recoverable data
           if (!recoverablePunkIds.has(punkId)) {
