@@ -80,7 +80,9 @@
         >
           <div class="col-punk">
             <div class="punk-info">
-              <div class="punk-id">{{ sale.punkId.slice(0, 8) }}...</div>
+              <div class="punk-id clickable" @click="viewPunk(sale.punkId)">
+                {{ sale.punkId.slice(0, 8) }}...
+              </div>
               <div v-if="sale.punkIndex !== undefined" class="punk-number">
                 #{{ sale.punkIndex }}
               </div>
@@ -121,12 +123,60 @@
         </button>
       </div>
     </div>
+
+    <!-- Punk Detail Modal -->
+    <div v-if="selectedPunk" class="modal-overlay" @click="closePunkModal">
+      <div class="modal-content" @click.stop>
+        <button class="modal-close" @click="closePunkModal">×</button>
+
+        <div class="punk-detail">
+          <div class="punk-image-large">
+            <img :src="selectedPunk.imageUrl" :alt="selectedPunk.name" />
+          </div>
+
+          <div class="punk-info-detail">
+            <h3>{{ selectedPunk.name }}</h3>
+
+            <div class="punk-type-badge" :class="`type-${selectedPunk.traits.type.toLowerCase()}`">
+              {{ selectedPunk.traits.type }}
+            </div>
+
+            <div class="punk-attributes">
+              <h4>Attributes:</h4>
+              <div class="attributes-list">
+                <span
+                  v-for="attr in selectedPunk.traits.attributes"
+                  :key="attr"
+                  class="attr-badge"
+                >
+                  {{ attr }}
+                </span>
+              </div>
+            </div>
+
+            <div class="punk-details-grid">
+              <div class="detail-item">
+                <span class="detail-label">Punk ID:</span>
+                <span class="detail-value">{{ selectedPunkId.slice(0, 16) }}...</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">Rarity Score:</span>
+                <span class="detail-value">{{ calculateRarity(selectedPunk) }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { getSalesHistory, getMarketStats } from '@/utils/nostrRegistry'
+import { decompressPunkMetadata } from '@/utils/compression'
+import { generatePunkImage, calculateRarityScore } from '@/utils/generator'
+import type { PunkMetadata } from '@/types/punk'
 
 interface Sale {
   id: string
@@ -160,6 +210,10 @@ const stats = ref<MarketStats>({
   totalSales: 0,
   averagePrice: 0n
 })
+
+// Modal state
+const selectedPunk = ref<PunkMetadata | null>(null)
+const selectedPunkId = ref('')
 
 const totalSalesCount = computed(() => allSales.value.length)
 const totalPages = computed(() => Math.ceil(totalSalesCount.value / salesPerPage))
@@ -244,6 +298,53 @@ async function refreshStats() {
   refreshing.value = true
   await loadStats()
   refreshing.value = false
+}
+
+function viewPunk(punkId: string) {
+  try {
+    // Extract compressed data from punkId (format: "punkId#compressedHex")
+    const parts = punkId.split('#')
+    if (parts.length < 2) {
+      console.error('Invalid punk ID format:', punkId)
+      alert('Unable to load punk details. Invalid punk ID format.')
+      return
+    }
+
+    const compressedHex = parts[1]
+    const compressedData = new Uint8Array(
+      compressedHex.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16))
+    )
+
+    // Decompress metadata
+    const metadata = decompressPunkMetadata(compressedData)
+
+    // Generate image URL from traits
+    const imageUrl = generatePunkImage(
+      metadata.traits.type,
+      metadata.traits.attributes,
+      metadata.traits.background
+    )
+
+    selectedPunk.value = {
+      ...metadata,
+      imageUrl
+    }
+    selectedPunkId.value = punkId
+
+    console.log('📷 Viewing punk:', metadata.name)
+  } catch (error) {
+    console.error('Failed to load punk details:', error)
+    alert('Unable to load punk details. The punk ID may be invalid or corrupted.')
+  }
+}
+
+function closePunkModal() {
+  selectedPunk.value = null
+  selectedPunkId.value = ''
+}
+
+function calculateRarity(punk: PunkMetadata): number {
+  return calculateRarityScore(punk)
 }
 
 onMounted(() => {
@@ -505,6 +606,187 @@ h2 {
   font-size: 14px;
 }
 
+/* Clickable Punk ID */
+.punk-id.clickable {
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.punk-id.clickable:hover {
+  color: #ff6b35;
+  text-decoration: underline;
+}
+
+/* Modal Overlay */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modal-content {
+  background: #1a1a1a;
+  border: 2px solid #ff6b35;
+  border-radius: 12px;
+  max-width: 800px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+  position: relative;
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.modal-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 36px;
+  height: 36px;
+  background: #333;
+  border: 1px solid #444;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 24px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  z-index: 10;
+}
+
+.modal-close:hover {
+  background: #ff6b35;
+  border-color: #ff6b35;
+  transform: scale(1.1);
+}
+
+.punk-detail {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 32px;
+  padding: 32px;
+}
+
+.punk-image-large {
+  width: 300px;
+  height: 300px;
+  background: #000;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 2px solid #333;
+}
+
+.punk-image-large img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  image-rendering: pixelated;
+}
+
+.punk-info-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.punk-info-detail h3 {
+  margin: 0;
+  color: #fff;
+  font-size: 28px;
+}
+
+.punk-type-badge {
+  display: inline-block;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: bold;
+  text-transform: uppercase;
+  width: fit-content;
+}
+
+.type-alien { background: #88ff88; color: #000; }
+.type-ape { background: #8b4513; color: #fff; }
+.type-zombie { background: #88cc88; color: #000; }
+.type-male { background: #4a9eff; color: #fff; }
+.type-female { background: #ff69b4; color: #fff; }
+
+.punk-attributes h4 {
+  margin: 0 0 12px 0;
+  color: #aaa;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.attributes-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.attr-badge {
+  padding: 6px 12px;
+  background: #333;
+  border: 1px solid #444;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 13px;
+}
+
+.punk-details-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background: #2a2a2a;
+  border-radius: 8px;
+  border: 1px solid #444;
+}
+
+.detail-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.detail-label {
+  color: #888;
+  font-size: 14px;
+}
+
+.detail-value {
+  color: #fff;
+  font-weight: 600;
+  font-size: 14px;
+  font-family: monospace;
+}
+
 @media (max-width: 768px) {
   .stats-grid {
     grid-template-columns: 1fr;
@@ -527,6 +809,21 @@ h2 {
 
   .stat-value {
     font-size: 20px;
+  }
+
+  .punk-detail {
+    grid-template-columns: 1fr;
+    padding: 24px;
+  }
+
+  .punk-image-large {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1;
+  }
+
+  .modal-content {
+    width: 95%;
   }
 }
 </style>
