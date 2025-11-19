@@ -304,12 +304,43 @@ async function viewPunk(punkId: string) {
   try {
     console.log('📷 Loading punk details:', punkId.slice(0, 16) + '...')
 
-    // Fetch the original mint event to get compressed data
+    // First, try to find punk in localStorage (local gallery)
+    const punksJson = localStorage.getItem('arkade_punks')
+    if (punksJson) {
+      try {
+        const localPunks = JSON.parse(punksJson)
+        const localPunk = localPunks.find((p: any) => p.punkId === punkId)
+
+        if (localPunk && localPunk.metadata) {
+          console.log('✅ Found punk in local gallery')
+
+          // Generate image from local metadata
+          const imageUrl = generatePunkImage(
+            localPunk.metadata.traits.type,
+            localPunk.metadata.traits.attributes,
+            localPunk.metadata.traits.background
+          )
+
+          selectedPunk.value = {
+            ...localPunk.metadata,
+            imageUrl
+          }
+          selectedPunkId.value = punkId
+          console.log('✅ Punk loaded from localStorage:', localPunk.metadata.name)
+          return
+        }
+      } catch (err) {
+        console.warn('Failed to parse localStorage punks:', err)
+      }
+    }
+
+    // Fallback: Fetch from Nostr mint events
+    console.log('⚠️ Punk not in local gallery, fetching from Nostr...')
     const mintEvent = await getPunkMintEvent(punkId)
 
     if (!mintEvent || !mintEvent.compressedHex) {
-      console.error('❌ Could not fetch mint event for punk:', punkId)
-      alert('Unable to load punk details. The punk may not have been minted yet or the data is unavailable.')
+      console.error('❌ Could not fetch punk data from Nostr or localStorage')
+      alert('Unable to load punk details. The punk data is not available.')
       return
     }
 
@@ -334,7 +365,7 @@ async function viewPunk(punkId: string) {
     }
     selectedPunkId.value = punkId
 
-    console.log('✅ Punk loaded:', metadata.name)
+    console.log('✅ Punk loaded from Nostr:', metadata.name)
   } catch (error) {
     console.error('Failed to load punk details:', error)
     alert('Unable to load punk details. An error occurred while fetching the data.')

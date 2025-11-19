@@ -473,7 +473,11 @@ export async function getSalesHistory(): Promise<Array<{
       }
     }
 
-    console.log(`   Found ${recoverablePunkIds.size} punks with recoverable data`)
+    // NOTE: We don't check localStorage here for sales history
+    // because other users won't have these punks in their local storage.
+    // Only punks with proper Nostr mint events should appear in sales history.
+
+    console.log(`   Found ${recoverablePunkIds.size} punks with recoverable data (Nostr only)`)
 
     const sales = events
       .map(event => {
