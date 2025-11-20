@@ -176,6 +176,7 @@ export async function createArkadeWallet(
         console.log('   Balance keys:', Object.keys(balance))
         console.log('   Balance.boarding:', balance.boarding, '(type:', typeof balance.boarding, ')')
         console.log('   Balance.available:', balance.available, '(type:', typeof balance.available, ')')
+        console.log('   Balance.recoverable:', balance.recoverable, '(type:', typeof balance.recoverable, ')')
         console.log('   Balance.total:', balance.total, '(type:', typeof balance.total, ')')
 
         // Helper to convert balance values to BigInt
@@ -208,12 +209,33 @@ export async function createArkadeWallet(
           return 0n
         }
 
+        // CRITICAL FIX: Calculate true spendable balance by excluding recoverable VTXOs
+        // The SDK's balance.available includes recoverable VTXOs that cannot be spent
+        // Get only spendable VTXOs
+        let spendableBalance = 0n
+        try {
+          const spendableVtxos = await wallet.getVtxos({ withRecoverable: false })
+          spendableBalance = spendableVtxos.reduce((sum: bigint, vtxo: any) => {
+            const amount = vtxo.value ?? vtxo.amount ?? 0
+            return sum + BigInt(amount)
+          }, 0n)
+          console.log('✅ Calculated spendable balance:', spendableBalance.toString(), 'sats (from', spendableVtxos.length, 'spendable VTXOs)')
+        } catch (error) {
+          console.warn('⚠️  Failed to get spendable VTXOs, falling back to balance.available:', error)
+          spendableBalance = toBigInt(balance.available)
+        }
+
+        const recoverableAmount = toBigInt(balance.recoverable)
+        if (recoverableAmount > 0n) {
+          console.warn('⚠️  You have', recoverableAmount.toString(), 'sats in recoverable VTXOs that cannot be spent yet')
+        }
+
         return {
           boarding: toBigInt(balance.boarding),
-          available: toBigInt(balance.available),
+          available: spendableBalance, // Use calculated spendable balance instead of SDK's available
           settled: toBigInt(balance.settled),
           preconfirmed: toBigInt(balance.preconfirmed),
-          recoverable: toBigInt(balance.recoverable),
+          recoverable: recoverableAmount,
           total: toBigInt(balance.total)
         }
       },

@@ -164,6 +164,13 @@
           </span>
         </div>
 
+        <div v-if="balance.recoverable > 0n" class="detail-row recoverable-warning">
+          <span class="label">⏳ Recoverable (not spendable):</span>
+          <span class="value">
+            {{ formatSats(balance.recoverable) }} sats
+          </span>
+        </div>
+
         <div class="detail-row">
           <span class="label">VTXOs:</span>
           <span class="value">{{ vtxoCount }}</span>
@@ -181,6 +188,10 @@
       <div class="wallet-actions">
         <button @click="refreshBalance" class="btn btn-secondary" :disabled="refreshing">
           {{ refreshing ? 'Refreshing...' : '🔄 Refresh' }}
+        </button>
+
+        <button @click="showSendModal = true" class="btn btn-send" :disabled="balance.available === 0n">
+          📤 Send
         </button>
 
         <button @click="runDiagnostics" class="btn btn-diagnostic">
@@ -274,6 +285,82 @@
       </div>
       </div>
       <!-- End expanded details -->
+
+      <!-- Send Modal -->
+      <div v-if="showSendModal" class="modal-overlay" @click="showSendModal = false">
+        <div class="modal-content" @click.stop>
+          <div class="modal-header">
+            <h3>📤 Send to Arkade Address</h3>
+            <button @click="showSendModal = false" class="btn-close">×</button>
+          </div>
+
+          <div class="modal-body">
+            <div class="info-box">
+              <p class="info-text">
+                Send funds to another Arkade address instantly and with no fees.
+              </p>
+            </div>
+
+            <div class="send-form">
+              <div class="form-group">
+                <label>
+                  <strong>Recipient Arkade Address:</strong>
+                  <input
+                    v-model="sendRecipient"
+                    type="text"
+                    placeholder="ark1..."
+                    class="input-address"
+                  />
+                </label>
+                <p class="input-hint">
+                  Enter the Arkade address (starts with "ark1...") of the recipient.
+                </p>
+              </div>
+
+              <div class="form-group">
+                <label>
+                  <strong>Amount (sats):</strong>
+                  <input
+                    v-model.number="sendAmount"
+                    type="number"
+                    :min="1000"
+                    :max="Number(balance.available)"
+                    step="1000"
+                    class="input-amount"
+                  />
+                </label>
+                <div class="amount-info">
+                  <span class="available-balance">Available: {{ formatSats(balance.available) }} sats</span>
+                  <button @click="sendAmount = Number(balance.available)" class="btn-max">Max</button>
+                </div>
+                <p class="input-hint">
+                  Minimum: 1,000 sats
+                </p>
+              </div>
+            </div>
+
+            <div v-if="sendStatus" class="send-status">
+              <p :class="sendSuccess ? 'status-success' : 'status-error'">
+                {{ sendStatus }}
+              </p>
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button
+              @click="performSend"
+              :disabled="!sendRecipient || !sendAmount || sendAmount < 1000 || sendAmount > Number(balance.available) || sending"
+              class="btn btn-primary"
+            >
+              {{ sending ? 'Sending...' : `📤 Send ${sendAmount ? sendAmount.toLocaleString() : '0'} sats` }}
+            </button>
+
+            <button @click="showSendModal = false" class="btn btn-secondary">
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -316,6 +403,14 @@ const exitL1Address = ref('')
 const preparingExit = ref(false)
 const exitPreparationStatus = ref('')
 const exitPreparationSuccess = ref(false)
+
+// Send modal state
+const showSendModal = ref(false)
+const sendRecipient = ref('')
+const sendAmount = ref(0)
+const sending = ref(false)
+const sendStatus = ref('')
+const sendSuccess = ref(false)
 
 const qrCanvas = ref<HTMLCanvasElement | null>(null)
 const walletAddress = ref('')
@@ -842,6 +937,76 @@ async function performActualExit() {
   }
 }
 
+async function performSend() {
+  if (!wallet || !sendRecipient.value || !sendAmount.value) return
+
+  sending.value = true
+  sendStatus.value = ''
+  sendSuccess.value = false
+
+  try {
+    console.log('📤 Sending funds...')
+    console.log('   Recipient:', sendRecipient.value)
+    console.log('   Amount:', sendAmount.value, 'sats')
+
+    // Confirm before sending
+    const confirmed = confirm(
+      `📤 Send Confirmation\n\n` +
+      `You are about to send ${sendAmount.value.toLocaleString()} sats to:\n` +
+      `${sendRecipient.value}\n\n` +
+      `This transaction is instant and has no fees.\n\n` +
+      `Continue?`
+    )
+
+    if (!confirmed) {
+      sending.value = false
+      return
+    }
+
+    // Send funds using Arkade wallet
+    const txid = await wallet.send(sendRecipient.value, BigInt(sendAmount.value))
+
+    sendStatus.value = `✅ Sent successfully! Transaction ID: ${txid.slice(0, 16)}...`
+    sendSuccess.value = true
+
+    console.log('✅ Send successful!')
+    console.log('   Transaction ID:', txid)
+
+    // Refresh balance after sending
+    await refreshBalance()
+
+    // Show success and close modal after delay
+    setTimeout(() => {
+      showSendModal.value = false
+      sendRecipient.value = ''
+      sendAmount.value = 0
+      sendStatus.value = ''
+    }, 3000)
+
+  } catch (error: any) {
+    console.error('❌ Send failed:', error)
+
+    // Check if it's a VTXO_RECOVERABLE error
+    if (error.message && error.message.includes('VTXO_RECOVERABLE')) {
+      sendStatus.value = `⏳ VTXOs not spendable. Click Refresh and try again.`
+
+      alert(
+        `⏳ VTXOs Not Spendable\n\n` +
+        `Some of your VTXOs are in "recoverable" state and cannot be spent yet.\n\n` +
+        `Click the "🔄 Refresh" button to update your spendable balance,\n` +
+        `then try sending again.\n\n` +
+        `Note: Recoverable VTXOs are shown separately in your wallet details.`
+      )
+    } else {
+      sendStatus.value = `❌ Send failed: ${error.message || error}`
+    }
+
+    sendSuccess.value = false
+  } finally {
+    sending.value = false
+  }
+}
+
 // Watch for arkade address changes to generate QR code
 watch(arkadeAddress, async (newAddress) => {
   if (newAddress && balance.value.total === 0n) {
@@ -1045,6 +1210,30 @@ h3 {
   box-shadow: 0 4px 12px rgba(217, 119, 6, 0.4);
 }
 
+.btn-send {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: #fff;
+  border: 2px solid #10b981;
+  padding: 12px 24px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: bold;
+  transition: all 0.2s;
+  width: 100%;
+}
+
+.btn-send:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+}
+
+.btn-send:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
 .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -1223,6 +1412,18 @@ h3 {
   padding: 8px;
   border-radius: 4px;
   border-left: 3px solid #fbbf24;
+}
+
+.detail-row.recoverable-warning {
+  background: rgba(255, 152, 0, 0.1);
+  padding: 8px;
+  border-radius: 4px;
+  border-left: 3px solid #ff9800;
+}
+
+.detail-row.recoverable-warning .label {
+  color: #ff9800;
+  font-weight: 600;
 }
 
 /* Nostr Public Key Section */
@@ -1876,6 +2077,83 @@ h3 {
 .btn-exit:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(255, 107, 53, 0.4);
+}
+
+/* Send Modal Styles */
+.send-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-top: 20px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-group label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: #fff;
+}
+
+.input-amount {
+  padding: 12px;
+  background: #2a2a2a;
+  border: 2px solid #444;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 16px;
+  font-family: monospace;
+  transition: border-color 0.2s;
+}
+
+.input-amount:focus {
+  outline: none;
+  border-color: #10b981;
+}
+
+.amount-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: #2a2a2a;
+  border-radius: 6px;
+}
+
+.available-balance {
+  color: #10b981;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.btn-max {
+  padding: 4px 12px;
+  background: #10b981;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: bold;
+  transition: all 0.2s;
+}
+
+.btn-max:hover {
+  background: #059669;
+  transform: scale(1.05);
+}
+
+.send-status {
+  margin: 16px 0;
+  padding: 12px;
+  border-radius: 6px;
+  font-weight: bold;
+  text-align: center;
 }
 
 @media (max-width: 768px) {
