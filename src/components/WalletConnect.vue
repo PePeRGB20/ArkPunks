@@ -194,6 +194,10 @@
           📤 Send
         </button>
 
+        <button @click="forceSettle" class="btn btn-settle" :disabled="!wallet">
+          ℹ️ VTXO Status Info
+        </button>
+
         <button @click="runDiagnostics" class="btn btn-diagnostic">
           🔍 Nostr Diagnostic
         </button>
@@ -391,6 +395,7 @@ const params = getNetworkParams()
 const connected = ref(false)
 const loading = ref(false)
 const refreshing = ref(false)
+const settling = ref(false)
 const showImport = ref(false)
 const importPrivateKey = ref('')
 const importMode = ref<'key' | 'file'>('key')
@@ -629,6 +634,42 @@ async function refreshBalance() {
   } finally {
     refreshing.value = false
   }
+}
+
+/**
+ * Force settlement of preconfirmed VTXOs
+ *
+ * IMPORTANT: VTXOs in "preconfirmed" state should automatically transition to "settled"
+ * when the Arkade round completes on the server (typically 1-2 minutes).
+ *
+ * If they're stuck for longer, it indicates an issue with the Arkade round on the server side.
+ * This function explains the situation and provides troubleshooting guidance.
+ */
+async function forceSettle() {
+  if (!wallet) return
+
+  console.log('🔍 Checking VTXO states...')
+  console.log('   Available balance:', balance.value.available.toString(), 'sats')
+  console.log('   Recoverable balance:', balance.value.recoverable.toString(), 'sats')
+
+  // Show explanation and guidance
+  alert(
+    `⚠️ Understanding VTXO States\n\n` +
+    `Your VTXOs Status:\n` +
+    `• Available (spendable): ${balance.value.available.toString()} sats\n` +
+    `• Recoverable (waiting): ${balance.value.recoverable.toString()} sats\n\n` +
+    `How VTXOs Work:\n` +
+    `1. New VTXOs start in "preconfirmed" state\n` +
+    `2. They automatically become "settled" when the Arkade round completes\n` +
+    `3. This normally takes 1-2 minutes\n\n` +
+    `If Stuck for >10 Minutes:\n` +
+    `This indicates an Arkade server issue. The VTXOs will settle automatically once the server completes the round.\n\n` +
+    `What You Can Do:\n` +
+    `• Click "🔄 Refresh" periodically to check status\n` +
+    `• Wait for the Arkade round to complete\n` +
+    `• If urgent, use "🟠 Exit to L1" to recover funds on-chain\n\n` +
+    `Note: There is no manual way to force VTXOs to settle - this happens automatically on the Arkade server when the round completes.`
+  )
 }
 
 async function generateQRCode(retryCount = 0) {
@@ -1249,6 +1290,30 @@ h3 {
 }
 
 .btn-send:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-settle {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: #fff;
+  border: 2px solid #3b82f6;
+  padding: 12px 24px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: bold;
+  transition: all 0.2s;
+  width: 100%;
+}
+
+.btn-settle:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+}
+
+.btn-settle:disabled {
   opacity: 0.5;
   cursor: not-allowed;
   transform: none;

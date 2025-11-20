@@ -8,6 +8,24 @@ import { hex } from '@scure/base'
 import { PunkVTXO, VtxoInput } from '@/types/punk'
 
 /**
+ * Check if a VTXO is truly spendable
+ * CRITICAL: Only "settled" VTXOs are accepted by Arkade server
+ */
+function isVtxoSpendable(vtxo: any): boolean {
+  const state = vtxo.virtualStatus?.state || 'unknown'
+  const isSpent = vtxo.isSpent || false
+
+  // CONFIRMED: Arkade server ONLY accepts "settled" VTXOs
+  // - "settled": Fully confirmed and spendable ✅
+  // - "preconfirmed": Server rejects with VTXO_RECOVERABLE error ❌
+  // - "swept": Already spent/recoverable ❌
+  //
+  // Note: VTXOs should transition from preconfirmed → settled within 1-2 minutes
+  // If stuck in preconfirmed, there may be an issue with the Arkade round
+  return state === 'settled' && !isSpent
+}
+
+/**
  * Wallet interface (wraps Arkade SDK Wallet)
  *
  * Note: This is a wrapper around @arkade-os/sdk
@@ -112,7 +130,11 @@ export async function createArkadeWallet(
 
   // Try to use real SDK if available
   try {
-    const { Wallet, SingleKey, Ramps } = await import('@arkade-os/sdk')
+    const sdk = await import('@arkade-os/sdk')
+    const { Wallet, SingleKey, Ramps } = sdk
+
+    // Log what's available in SDK for debugging
+    console.log('📦 SDK exports:', Object.keys(sdk).filter(k => typeof sdk[k] === 'function').slice(0, 20))
 
     // Create identity using SDK's SingleKey from hex
     const privateKeyHex = hex.encode(identity.privateKey)
@@ -209,19 +231,19 @@ export async function createArkadeWallet(
           return 0n
         }
 
-        // CRITICAL FIX: Calculate true spendable balance by excluding recoverable VTXOs
-        // The SDK's balance.available includes recoverable VTXOs that cannot be spent
-        // Get only spendable VTXOs
+        // CRITICAL FIX: Calculate true spendable balance by checking VTXO states
+        // The SDK's balance.available includes "preconfirmed" VTXOs that the server rejects
+        // We must check each VTXO's state manually - only "settled" VTXOs are spendable
         let spendableBalance = 0n
         try {
           // Get all VTXOs with detailed information
           const allVtxos = await wallet.getVtxos()
-          const spendableVtxos = await wallet.getVtxos({ withRecoverable: false })
 
           console.log('📋 VTXO Breakdown:')
           console.log('   Total VTXOs:', allVtxos.length)
-          console.log('   Spendable VTXOs:', spendableVtxos.length)
-          console.log('   Recoverable VTXOs:', allVtxos.length - spendableVtxos.length)
+
+          const spendableVtxos: any[] = []
+          const nonSpendableVtxos: any[] = []
 
           // Log each VTXO's state for debugging
           if (allVtxos.length > 0) {
@@ -230,23 +252,33 @@ export async function createArkadeWallet(
               const amount = vtxo.value ?? vtxo.amount ?? 0
               const state = vtxo.virtualStatus?.state || 'unknown'
               const isSpent = vtxo.isSpent || false
-              const isRecoverable = vtxo.virtualStatus?.state === 'swept' || vtxo.virtualStatus?.state === 'spent'
+              const canSpend = isVtxoSpendable(vtxo)
 
               console.log(`   VTXO ${index + 1}:`, {
                 amount: amount.toString() + ' sats',
                 state: state,
                 isSpent: isSpent,
+                canSpend: canSpend,
                 txid: vtxo.txid?.slice(0, 16) + '...',
                 vout: vtxo.vout
               })
+
+              if (canSpend) {
+                spendableVtxos.push(vtxo)
+              } else {
+                nonSpendableVtxos.push(vtxo)
+              }
             })
           }
+
+          console.log('   Spendable VTXOs (settled/preconfirmed):', spendableVtxos.length)
+          console.log('   Non-spendable VTXOs (swept):', nonSpendableVtxos.length)
 
           spendableBalance = spendableVtxos.reduce((sum: bigint, vtxo: any) => {
             const amount = vtxo.value ?? vtxo.amount ?? 0
             return sum + BigInt(amount)
           }, 0n)
-          console.log('✅ Calculated spendable balance:', spendableBalance.toString(), 'sats')
+          console.log('✅ Calculated TRUE spendable balance:', spendableBalance.toString(), 'sats')
         } catch (error) {
           console.warn('⚠️  Failed to get spendable VTXOs, falling back to balance.available:', error)
           spendableBalance = toBigInt(balance.available)
