@@ -159,9 +159,14 @@
         <div class="detail-row">
           <span class="label">Available for mint:</span>
           <span class="value">
-            {{ formatSats(balance.available) }} sats
+            {{ formatSats(availableForMinting) }} sats
             <span class="mints-available">({{ possibleMints }} {{ possibleMints === 1 ? 'punk' : 'punks' }})</span>
           </span>
+        </div>
+
+        <div v-if="punkLockedBalance > 0n" class="detail-row">
+          <span class="label">Locked in punks:</span>
+          <span class="value">{{ formatSats(punkLockedBalance) }} sats</span>
         </div>
 
         <div v-if="balance.recoverable > 0n" class="detail-row recoverable-warning">
@@ -206,9 +211,82 @@
           💾 Export Wallet
         </button>
 
+        <button @click="showSendModal = true" class="btn btn-send">
+          📤 Send Sats
+        </button>
+
         <button @click="showExitModal = true" class="btn btn-exit-l1">
           🟠 Exit to L1
         </button>
+      </div>
+
+      <!-- Send Modal -->
+      <div v-if="showSendModal" class="modal-overlay" @click="showSendModal = false">
+        <div class="modal-content" @click.stop>
+          <div class="modal-header">
+            <h3>📤 Send Bitcoin (Off-chain)</h3>
+            <button @click="showSendModal = false" class="btn-close">×</button>
+          </div>
+
+          <div class="modal-body">
+            <div class="info-box">
+              <p>Send your available sats to any Arkade wallet address (ark...).</p>
+              <p><strong>Available to send:</strong> {{ formatSats(availableForMinting) }} sats</p>
+            </div>
+
+            <div class="send-input-group">
+              <label>
+                <strong>Recipient Arkade Address:</strong>
+                <input
+                  v-model="sendRecipientAddress"
+                  type="text"
+                  placeholder="ark..."
+                  class="input-address"
+                />
+              </label>
+              <p class="input-hint">
+                Enter the recipient's Arkade off-chain address (starts with "ark")
+              </p>
+            </div>
+
+            <div class="send-input-group">
+              <label>
+                <strong>Amount (sats):</strong>
+                <input
+                  v-model.number="sendAmount"
+                  type="number"
+                  min="1000"
+                  :max="Number(availableForMinting)"
+                  placeholder="10000"
+                  class="input-amount"
+                />
+              </label>
+              <p class="input-hint">
+                Minimum: 1,000 sats. You have {{ formatSats(availableForMinting) }} sats available.
+              </p>
+            </div>
+
+            <div v-if="sendStatus" class="send-status">
+              <p :class="sendSuccess ? 'status-success' : 'status-error'">
+                {{ sendStatus }}
+              </p>
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button
+              @click="sendSats"
+              :disabled="!sendRecipientAddress || !sendAmount || sendAmount < 1000 || sending"
+              class="btn btn-primary"
+            >
+              {{ sending ? 'Sending...' : 'Send' }}
+            </button>
+
+            <button @click="showSendModal = false" class="btn btn-secondary">
+              Cancel
+            </button>
+          </div>
+        </div>
       </div>
 
       <!-- L1 Exit Modal -->
@@ -381,6 +459,7 @@ import {
   type ArkadeWalletInterface,
   type WalletBalance
 } from '@/utils/arkadeWallet'
+import type { VtxoInput } from '@/types/punk'
 import { getActiveConfig, getNetworkParams } from '@/config/arkade'
 import { hex } from '@scure/base'
 import QRCode from 'qrcode'
@@ -406,6 +485,14 @@ const expanded = ref(false) // Wallet details collapsed by default
 const showExitModal = ref(false)
 const exitL1Address = ref('')
 const preparingExit = ref(false)
+
+// Send modal state
+const showSendModal = ref(false)
+const sendRecipientAddress = ref('')
+const sendAmount = ref<number | null>(null)
+const sending = ref(false)
+const sendStatus = ref('')
+const sendSuccess = ref(false)
 const exitPreparationStatus = ref('')
 const exitPreparationSuccess = ref(false)
 
@@ -430,15 +517,50 @@ const balance = ref<WalletBalance>({
   total: 0n
 })
 const vtxoCount = ref(0)
+const vtxos = ref<VtxoInput[]>([]) // Store VTXOs to calculate punk-locked balance
 
 let wallet: ArkadeWalletInterface | null = null
 
 const minVtxoValue = params.minVtxoValue
 
-const canMintPunks = computed(() => balance.value.available >= minVtxoValue)
+// Calculate balance locked in punks
+const punkLockedBalance = computed(() => {
+  try {
+    const punksJson = localStorage.getItem('arkade_punks')
+    if (!punksJson) return 0n
+
+    const punks = JSON.parse(punksJson)
+    if (!Array.isArray(punks) || punks.length === 0) return 0n
+
+    // Get punk VTXO outpoints
+    const punkOutpoints = new Set(punks.map((p: any) => p.vtxoOutpoint))
+
+    // Sum up amounts of VTXOs that belong to punks
+    let locked = 0n
+    for (const vtxo of vtxos.value) {
+      const outpoint = `${vtxo.vtxo.outpoint.txid}:${vtxo.vtxo.outpoint.vout}`
+      if (punkOutpoints.has(outpoint)) {
+        locked += BigInt(vtxo.vtxo.amount)
+      }
+    }
+
+    return locked
+  } catch (error) {
+    console.error('Failed to calculate punk-locked balance:', error)
+    return 0n
+  }
+})
+
+// True available balance for minting (excludes punk VTXOs)
+const availableForMinting = computed(() => {
+  const available = balance.value.available - punkLockedBalance.value
+  return available > 0n ? available : 0n
+})
+
+const canMintPunks = computed(() => availableForMinting.value >= minVtxoValue)
 
 const possibleMints = computed(() => {
-  return Number(balance.value.available / minVtxoValue)
+  return Number(availableForMinting.value / minVtxoValue)
 })
 
 const isValidHex = computed(() => {
@@ -485,6 +607,14 @@ async function createNewWallet() {
     await updateWalletInfo()
 
     connected.value = true
+
+    // Auto-renew expiring VTXOs (for new wallet, likely none, but good practice)
+    console.log('🔄 Checking for expiring VTXOs after wallet creation...')
+    const renewalResult = await wallet.checkAndRenewVtxos()
+    if (renewalResult.renewed) {
+      console.log(`✅ Renewed ${renewalResult.expiringCount} VTXO(s)`)
+      await updateWalletInfo()
+    }
   } catch (error) {
     console.error('Failed to create wallet:', error)
     alert('Failed to create wallet. See console for details.')
@@ -722,9 +852,23 @@ async function updateWalletInfo() {
   balance.value = info.balance
   vtxoCount.value = info.vtxoCount
 
+  // Fetch VTXOs to calculate punk-locked balance
+  try {
+    vtxos.value = await wallet.getVtxos()
+  } catch (error) {
+    console.error('Failed to fetch VTXOs:', error)
+    vtxos.value = []
+  }
+
   console.log('📍 Addresses updated:')
   console.log('   Arkade (native):', arkadeAddress.value)
   console.log('   Boarding (on-chain):', boardingAddress.value)
+  console.log('💰 Balance breakdown:')
+  console.log('   Total balance:', formatSats(balance.value.total), 'sats')
+  console.log('   Available (raw):', formatSats(balance.value.available), 'sats')
+  console.log('   Locked in punks:', formatSats(punkLockedBalance.value), 'sats')
+  console.log('   Available for minting:', formatSats(availableForMinting.value), 'sats')
+  console.log('   Possible mints:', possibleMints.value)
 
   // Generate QR code when address is available
   if (arkadeAddress.value && balance.value.total === 0n) {
@@ -891,6 +1035,74 @@ function exportWallet() {
   } catch (error) {
     console.error('Export failed:', error)
     alert('Failed to export wallet. See console for details.')
+  }
+}
+
+/**
+ * Send sats to another Arkade wallet
+ */
+async function sendSats() {
+  if (!wallet) {
+    sendStatus.value = 'Wallet not connected!'
+    sendSuccess.value = false
+    return
+  }
+
+  if (!sendRecipientAddress.value || !sendAmount.value) {
+    sendStatus.value = 'Please enter recipient address and amount'
+    sendSuccess.value = false
+    return
+  }
+
+  if (sendAmount.value < 1000) {
+    sendStatus.value = 'Minimum amount is 1,000 sats'
+    sendSuccess.value = false
+    return
+  }
+
+  if (BigInt(sendAmount.value) > availableForMinting.value) {
+    sendStatus.value = `Insufficient balance. You have ${formatSats(availableForMinting.value)} sats available.`
+    sendSuccess.value = false
+    return
+  }
+
+  sending.value = true
+  sendStatus.value = ''
+  sendSuccess.value = false
+
+  try {
+    console.log('📤 Sending sats...')
+    console.log('   Recipient:', sendRecipientAddress.value)
+    console.log('   Amount:', sendAmount.value, 'sats')
+
+    const txid = await wallet.send(
+      sendRecipientAddress.value,
+      BigInt(sendAmount.value)
+    )
+
+    console.log('✅ Send successful!')
+    console.log('   TX ID:', txid)
+
+    sendStatus.value = `✅ Sent ${sendAmount.value} sats successfully!\nTX ID: ${txid.slice(0, 16)}...`
+    sendSuccess.value = true
+
+    // Refresh balance
+    await refreshBalance()
+
+    // Reset form after 3 seconds
+    setTimeout(() => {
+      sendRecipientAddress.value = ''
+      sendAmount.value = null
+      sendStatus.value = ''
+      showSendModal.value = false
+    }, 3000)
+
+  } catch (error: any) {
+    console.error('❌ Send failed:', error)
+    sendStatus.value = `Failed to send: ${error?.message || error}`
+    sendSuccess.value = false
+  } finally {
+    sending.value = false
   }
 }
 
@@ -1071,9 +1283,11 @@ async function performSend() {
 // Watch for arkade address changes to generate QR code
 watch(arkadeAddress, async (newAddress) => {
   if (newAddress && balance.value.total === 0n) {
+    // Auto-expand wallet details to show QR code for funding
+    expanded.value = true
     await nextTick()
     // Give Vue extra time to render the canvas in the DOM
-    setTimeout(() => generateQRCode(), 50)
+    setTimeout(() => generateQRCode(), 100)
   }
 })
 
@@ -1086,6 +1300,15 @@ onMounted(async () => {
       wallet = await createArkadeWallet(identity)
       await updateWalletInfo()
       connected.value = true
+
+      // Auto-renew expiring VTXOs on startup
+      console.log('🔄 Checking for expiring VTXOs on startup...')
+      const renewalResult = await wallet.checkAndRenewVtxos()
+      if (renewalResult.renewed) {
+        console.log(`✅ Renewed ${renewalResult.expiringCount} VTXO(s) on startup`)
+        // Refresh balance after renewal
+        await updateWalletInfo()
+      }
     } catch (error) {
       console.error('Failed to restore wallet:', error)
       clearIdentity()
@@ -2145,6 +2368,47 @@ h3 {
   background: #2a1a1a;
   border: 2px solid #ff6b35;
   color: #ff6b35;
+}
+
+/* Send modal styles */
+.send-input-group {
+  margin: 20px 0;
+}
+
+.send-input-group label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: #fff;
+}
+
+.input-amount {
+  padding: 12px;
+  background: #2a2a2a;
+  border: 2px solid #444;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 16px;
+  font-family: 'Courier New', monospace;
+  transition: border-color 0.2s;
+}
+
+.input-amount:focus {
+  outline: none;
+  border-color: #f7931a;
+}
+
+.send-status {
+  margin: 16px 0;
+  padding: 12px;
+  border-radius: 6px;
+  font-weight: bold;
+  white-space: pre-line;
+}
+
+.btn-send {
+  background: linear-gradient(135deg, #4ade80 0%, #10b981 100%);
+  color: #fff;
 }
 
 .btn-exit {

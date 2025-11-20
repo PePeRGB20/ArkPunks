@@ -1,7 +1,13 @@
 <template>
   <div class="marketplace">
     <h2>Marketplace</h2>
-    <p class="subtitle">Buy and sell ArkPunks</p>
+    <p class="subtitle">List and browse ArkPunks</p>
+
+    <!-- TEMPORARY: Marketplace buy feature disabled -->
+    <div class="marketplace-notice">
+      <strong>⚠️ Notice:</strong> Marketplace buying is temporarily disabled while we implement atomic swaps.
+      You can still browse listings and list your own punks for sale.
+    </div>
 
     <div v-if="loading" class="loading-state">
       <div class="spinner"></div>
@@ -60,14 +66,11 @@
             </div>
           </div>
 
-          <button
-            v-if="!isOwnPunk(punk)"
-            @click="buyPunk(punk)"
-            :disabled="buying"
-            class="btn btn-buy"
-          >
-            {{ buying ? 'Processing...' : `Buy for ${formatSats(calculateTotal(punk.listingPrice))} sats` }}
-          </button>
+          <!-- DISABLED: Marketplace buying temporarily disabled -->
+          <div v-if="!isOwnPunk(punk)" class="buy-disabled-label">
+            <span>💱 Buying coming soon</span>
+            <small>Waiting for atomic swaps</small>
+          </div>
 
           <div v-else class="own-punk-label">
             <span>🎨 Your punk</span>
@@ -273,7 +276,19 @@ async function loadListings() {
   }
 }
 
+/**
+ * DISABLED: This function has a critical bug - it sends payment to seller
+ * but doesn't transfer the punk VTXO, resulting in the seller keeping both
+ * the payment AND the punk. This is because Arkade doesn't support atomic
+ * swaps yet. We need to implement an escrow/coordinator system or wait for
+ * Arkade to add atomic swap support before re-enabling marketplace purchases.
+ */
 async function buyPunk(punk: MarketplaceListing) {
+  alert('Marketplace buying is temporarily disabled while we implement atomic swaps.')
+  return
+
+  // DISABLED CODE BELOW - DO NOT USE UNTIL ATOMIC SWAPS ARE IMPLEMENTED
+
   const currentWallet = wallet?.()
   if (!currentWallet) {
     alert('Please connect your wallet first!')
@@ -598,6 +613,44 @@ h2 {
   color: #ff6b35;
   font-size: 14px;
   font-weight: 600;
+}
+
+.marketplace-notice {
+  background: rgba(255, 193, 7, 0.1);
+  border: 2px solid #ffc107;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 24px;
+  color: #ffc107;
+  text-align: center;
+}
+
+.marketplace-notice strong {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 16px;
+}
+
+.buy-disabled-label {
+  text-align: center;
+  padding: 12px;
+  background: rgba(136, 136, 136, 0.1);
+  border: 2px solid #666;
+  border-radius: 6px;
+  color: #888;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.buy-disabled-label span {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.buy-disabled-label small {
+  font-size: 11px;
+  color: #666;
+  font-weight: normal;
 }
 
 /* Pagination */

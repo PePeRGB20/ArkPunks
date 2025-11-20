@@ -6,7 +6,7 @@
     <div v-if="!isLaunched" class="launch-countdown">
       <div class="countdown-container">
         <h3>🚀 Official Launch Countdown</h3>
-        <p class="launch-date">November 20, 2025 at 12:00 CET</p>
+        <p class="launch-date">November 21, 2025 at 12:00 CET</p>
 
         <div class="countdown-timer">
           <div class="time-block">
@@ -36,8 +36,8 @@
       </div>
     </div>
 
-    <!-- Supply Counter (shown after launch) -->
-    <div v-else class="supply-counter">
+    <!-- Supply Counter -->
+    <div v-if="isLaunched" class="supply-counter">
       <div class="counter-bar">
         <div class="counter-fill" :style="{ width: supplyPercentage + '%' }"></div>
       </div>

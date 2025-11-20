@@ -11,8 +11,8 @@ const RELAYS = [
   'wss://relay.snort.social'
 ]
 
-const KIND_PUNK_MINT = 1337
-const KIND_PUNK_EXIT = 1341
+const KIND_PUNK_MINT = 1400 // Mainnet launch event kind
+const KIND_PUNK_EXIT = 1404 // Mainnet launch event kind
 
 /**
  * Query ALL punk mints on Nostr (regardless of owner)

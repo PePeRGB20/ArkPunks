@@ -14,9 +14,10 @@ const RELAYS = [
   'wss://relay.snort.social'
 ]
 
-const KIND_PUNK_LISTING = 1338 // Different from mint (1337)
-const KIND_PUNK_SOLD = 1339 // Punk sold event
-const KIND_PUNK_TRANSFER = 1340 // Direct punk transfer (gift/trade)
+// Event kinds (Mainnet Launch - Nov 21, 2025)
+const KIND_PUNK_LISTING = 1401  // Marketplace listing (was 1338)
+const KIND_PUNK_SOLD = 1402     // Punk sold event (was 1339)
+const KIND_PUNK_TRANSFER = 1403 // Direct punk transfer (was 1340)
 
 export interface MarketplaceListing {
   punkId: string
@@ -339,8 +340,8 @@ export async function publishPunkTransfer(
 /**
  * Sync all punks owned by a user from Nostr (for recovery/import scenarios)
  * Recovers:
- * 1. Punks minted by the user (KIND 1337 events)
- * 2. Punks bought on marketplace (KIND 1339 buyer events)
+ * 1. Punks minted by the user (KIND 1400 events)
+ * 2. Punks bought on marketplace (KIND 1402 buyer events)
  * Excludes:
  * - Punks sold and not bought back
  */
@@ -363,7 +364,7 @@ export async function syncPunksFromNostr(
     // Query for all mint events by this user
     // IMPORTANT: Query both by Nostr pubkey (authors) AND Bitcoin address (owner tag)
     // This handles cases where Nostr key changed but wallet address stayed the same
-    const KIND_PUNK_MINT = 1337
+    const KIND_PUNK_MINT = 1400
 
     const [mintEventsByAuthor, mintEventsByOwner] = await Promise.all([
       // Query by Nostr event author (pubkey)

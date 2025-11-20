@@ -3,9 +3,10 @@
  *
  * Uses Nostr relays to track global punk supply in a decentralized way.
  *
- * Events:
- * - Kind 1337: Individual punk mint event
- * - Kind 30333: Global registry (replaceable event for current supply count)
+ * Event kinds (Mainnet Launch - Nov 21, 2025):
+ * - Kind 1400: Individual punk mint event
+ * - Kind 1404: L1 exit event (punk → Bitcoin address)
+ * - Kind 30334: Global registry (replaceable event for current supply count)
  *
  * Official Relay: The first relay in the list is the "authority" for supply cap
  */
@@ -27,10 +28,10 @@ const RELAYS = [
   'wss://relay.snort.social'
 ]
 
-// Event kinds
-const KIND_PUNK_MINT = 1337      // Individual punk mint
-const KIND_PUNK_EXIT = 1341      // L1 exit event (punk → Bitcoin address)
-const KIND_PUNK_REGISTRY = 30333 // Global supply registry (replaceable)
+// Event kinds (Mainnet Launch)
+const KIND_PUNK_MINT = 1400      // Individual punk mint
+const KIND_PUNK_EXIT = 1404      // L1 exit event (punk → Bitcoin address)
+const KIND_PUNK_REGISTRY = 30334 // Global supply registry (replaceable)
 
 // Global pool
 const pool = new SimplePool()
@@ -46,7 +47,7 @@ export async function getNostrSupply(): Promise<{
   try {
     console.log('📡 Fetching punk supply from Nostr relays...')
 
-    // Fetch all punk mint events (kind 1337)
+    // Fetch all punk mint events (kind 1400)
     const events = await pool.querySync(RELAYS, {
       kinds: [KIND_PUNK_MINT],
       '#t': ['arkade-punk'],

@@ -42,6 +42,7 @@ export interface ArkadeWalletInterface {
   board: (amount: bigint) => Promise<string> // On-chain to off-chain
   settle: () => Promise<string> // Finalize pending boarding/transactions (returns txid)
   exit: (vtxos: VtxoInput[], feeRate?: number) => Promise<string> // Off-chain to on-chain
+  checkAndRenewVtxos: () => Promise<{ renewed: boolean; txid?: string; expiringCount: number }> // Auto-renew expiring VTXOs
 }
 
 export interface WalletBalance {
@@ -378,6 +379,49 @@ export async function createArkadeWallet(
         // Collaborative exit
         const result = await wallet.exit({ feeRate })
         return result.txid
+      },
+      checkAndRenewVtxos: async () => {
+        try {
+          console.log('🔍 Checking for expiring VTXOs...')
+
+          // Import VtxoManager from SDK
+          const { VtxoManager } = await import('@arkade-os/sdk')
+
+          // Create VtxoManager with 10% threshold (recommended by Arkade docs)
+          const vtxoManager = new VtxoManager(wallet, {
+            thresholdPercentage: 10
+          })
+
+          // Check for expiring VTXOs
+          const expiringVtxos = await vtxoManager.getExpiringVtxos()
+
+          if (expiringVtxos.length > 0) {
+            console.log(`🔄 Found ${expiringVtxos.length} expiring VTXO(s), renewing...`)
+
+            // Renew expiring VTXOs
+            const txid = await vtxoManager.renewVtxos()
+
+            console.log(`✅ VTXOs renewed! Txid: ${txid}`)
+
+            return {
+              renewed: true,
+              txid,
+              expiringCount: expiringVtxos.length
+            }
+          }
+
+          console.log('✅ No VTXOs need renewal')
+          return {
+            renewed: false,
+            expiringCount: 0
+          }
+        } catch (error) {
+          console.error('❌ VTXO renewal failed:', error)
+          return {
+            renewed: false,
+            expiringCount: 0
+          }
+        }
       }
     }
   } catch (error) {
@@ -436,6 +480,14 @@ export async function createArkadeWallet(
     exit: async (vtxos) => {
       console.log(`[MOCK] Exit ${vtxos.length} VTXOs to on-chain`)
       return '0'.repeat(64)
+    },
+
+    checkAndRenewVtxos: async () => {
+      console.log('[MOCK] checkAndRenewVtxos - no-op in mock mode')
+      return {
+        renewed: false,
+        expiringCount: 0
+      }
     }
   }
 }

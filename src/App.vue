@@ -387,7 +387,7 @@ async function isPunkSold(punkId: string, myPubkey: string): Promise<{ sold: boo
     'wss://nostr.wine',
     'wss://relay.snort.social'
   ]
-  const KIND_PUNK_SOLD = 1339
+  const KIND_PUNK_SOLD = 1402 // Mainnet launch event kind
 
   try {
     // Query for sold events for this specific punk

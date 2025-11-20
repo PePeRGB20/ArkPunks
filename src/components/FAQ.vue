@@ -228,7 +228,7 @@
             <p><strong>No!</strong> Your punks are preserved via Nostr.</p>
             <p>When you exit to L1, ArkPunks automatically:</p>
             <ol>
-              <li>Publishes exit events to Nostr relays (KIND 1341)</li>
+              <li>Publishes exit events to Nostr relays (KIND 1404)</li>
               <li>Links each punk to your destination Bitcoin address</li>
               <li>Stores compressed punk metadata in Nostr events</li>
             </ol>

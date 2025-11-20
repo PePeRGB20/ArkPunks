@@ -13,7 +13,7 @@ import { PUNK_SUPPLY_CONFIG } from '@/config/arkade'
 
 // Official relay - the authority for punk mints
 const OFFICIAL_RELAY = 'wss://relay.damus.io'
-const KIND_PUNK_MINT = 1337
+const KIND_PUNK_MINT = 1400 // Mainnet launch event kind
 
 // Cache for official punks list
 let officialPunksCache: {
