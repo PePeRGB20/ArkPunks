@@ -214,12 +214,39 @@ export async function createArkadeWallet(
         // Get only spendable VTXOs
         let spendableBalance = 0n
         try {
+          // Get all VTXOs with detailed information
+          const allVtxos = await wallet.getVtxos()
           const spendableVtxos = await wallet.getVtxos({ withRecoverable: false })
+
+          console.log('📋 VTXO Breakdown:')
+          console.log('   Total VTXOs:', allVtxos.length)
+          console.log('   Spendable VTXOs:', spendableVtxos.length)
+          console.log('   Recoverable VTXOs:', allVtxos.length - spendableVtxos.length)
+
+          // Log each VTXO's state for debugging
+          if (allVtxos.length > 0) {
+            console.log('📊 Detailed VTXO states:')
+            allVtxos.forEach((vtxo: any, index: number) => {
+              const amount = vtxo.value ?? vtxo.amount ?? 0
+              const state = vtxo.virtualStatus?.state || 'unknown'
+              const isSpent = vtxo.isSpent || false
+              const isRecoverable = vtxo.virtualStatus?.state === 'swept' || vtxo.virtualStatus?.state === 'spent'
+
+              console.log(`   VTXO ${index + 1}:`, {
+                amount: amount.toString() + ' sats',
+                state: state,
+                isSpent: isSpent,
+                txid: vtxo.txid?.slice(0, 16) + '...',
+                vout: vtxo.vout
+              })
+            })
+          }
+
           spendableBalance = spendableVtxos.reduce((sum: bigint, vtxo: any) => {
             const amount = vtxo.value ?? vtxo.amount ?? 0
             return sum + BigInt(amount)
           }, 0n)
-          console.log('✅ Calculated spendable balance:', spendableBalance.toString(), 'sats (from', spendableVtxos.length, 'spendable VTXOs)')
+          console.log('✅ Calculated spendable balance:', spendableBalance.toString(), 'sats')
         } catch (error) {
           console.warn('⚠️  Failed to get spendable VTXOs, falling back to balance.available:', error)
           spendableBalance = toBigInt(balance.available)
@@ -228,6 +255,8 @@ export async function createArkadeWallet(
         const recoverableAmount = toBigInt(balance.recoverable)
         if (recoverableAmount > 0n) {
           console.warn('⚠️  You have', recoverableAmount.toString(), 'sats in recoverable VTXOs that cannot be spent yet')
+          console.warn('⚠️  These VTXOs need to complete the Arkade round cycle before becoming spendable')
+          console.warn('⚠️  This typically takes 1-2 minutes from when they were created/received')
         }
 
         return {

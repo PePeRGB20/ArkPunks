@@ -949,6 +949,25 @@ async function performSend() {
     console.log('   Recipient:', sendRecipient.value)
     console.log('   Amount:', sendAmount.value, 'sats')
 
+    // CRITICAL CHECK: Verify we have spendable VTXOs before attempting send
+    // The SDK will try to use ALL VTXOs including recoverable ones, so we need to block if only recoverable
+    console.log('🔍 Verifying spendable VTXOs before send...')
+    console.log('   Available balance:', balance.value.available.toString(), 'sats')
+    console.log('   Recoverable balance:', balance.value.recoverable.toString(), 'sats')
+
+    if (balance.value.available === 0n && balance.value.recoverable > 0n) {
+      sendStatus.value = `⏳ All VTXOs are recoverable - refresh and try again`
+      alert(
+        `⏳ All VTXOs are Recoverable\n\n` +
+        `You have ${balance.value.recoverable.toString()} sats in recoverable VTXOs.\n` +
+        `These cannot be spent yet.\n\n` +
+        `Click "🔄 Refresh" to check if they've become spendable.\n\n` +
+        `Recoverable VTXOs typically take 1-2 minutes to become spendable after receiving them.`
+      )
+      sending.value = false
+      return
+    }
+
     // Confirm before sending
     const confirmed = confirm(
       `📤 Send Confirmation\n\n` +
@@ -964,6 +983,7 @@ async function performSend() {
     }
 
     // Send funds using Arkade wallet
+    console.log('✅ Proceeding with send - we have spendable balance')
     const txid = await wallet.send(sendRecipient.value, BigInt(sendAmount.value))
 
     sendStatus.value = `✅ Sent successfully! Transaction ID: ${txid.slice(0, 16)}...`
