@@ -40,8 +40,8 @@ export async function getMarketplaceListings(): Promise<MarketplaceListing[]> {
   const pool = new SimplePool()
 
   try {
-    // Determine current network
-    const currentNetwork = import.meta.env.VITE_ARKADE_NETWORK || 'testnet'
+    // Determine current network (default to mainnet if not set)
+    const currentNetwork = import.meta.env.VITE_ARKADE_NETWORK || 'mainnet'
     console.log(`📊 Marketplace: Filtering for network: ${currentNetwork}`)
 
     // Query for ALL listing events (including delist events) AND sold events
@@ -427,8 +427,8 @@ export async function syncPunksFromNostr(
     console.log(`   Total unique mint events: ${mintEvents.length}`)
 
     // Query for all sold events and transfer events
-    // Determine current network
-    const currentNetwork = import.meta.env.VITE_ARKADE_NETWORK || 'testnet'
+    // Determine current network (default to mainnet if not set)
+    const currentNetwork = import.meta.env.VITE_ARKADE_NETWORK || 'mainnet'
 
     const [soldEvents, transferEvents] = await Promise.all([
       pool.querySync(RELAYS, {

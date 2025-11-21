@@ -47,8 +47,8 @@ export async function getNostrSupply(): Promise<{
   try {
     console.log('📡 Fetching punk supply from Nostr relays...')
 
-    // Determine current network
-    const currentNetwork = import.meta.env.VITE_ARKADE_NETWORK || 'testnet'
+    // Determine current network (default to mainnet if not set)
+    const currentNetwork = import.meta.env.VITE_ARKADE_NETWORK || 'mainnet'
     console.log(`   Filtering for network: ${currentNetwork}`)
 
     // Fetch all punk mint events (kind 1400) for current network only
