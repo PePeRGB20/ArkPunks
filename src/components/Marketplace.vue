@@ -68,10 +68,7 @@
               <span class="price-value">{{ formatSats(punk.listingPrice) }} sats</span>
             </div>
             <div class="fee-info">
-              <small v-if="punk.saleMode === 'escrow'">
-                + 0.5% marketplace fee ({{ formatSats(calculateFee(punk.listingPrice, 0.5)) }} sats)
-              </small>
-              <small v-else>
+              <small>
                 + 1% marketplace fee ({{ formatSats(calculateFee(punk.listingPrice, 1)) }} sats)
               </small>
             </div>

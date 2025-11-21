@@ -77,7 +77,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       instructions: [
         `1. Send your punk VTXO (${punkVtxoOutpoint}) to ${escrowAddress}`,
         '2. Once received, your punk will appear on the marketplace',
-        '3. When sold, you will receive payment automatically (minus 0.5% fee)'
+        '3. When sold, you will receive payment automatically (minus 1% fee)'
       ]
     })
 

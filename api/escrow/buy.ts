@@ -9,7 +9,7 @@
  * The actual transfer is handled by the monitoring service which:
  * 1. Detects when buyer sends payment to escrow address
  * 2. Transfers punk VTXO to buyer
- * 3. Transfers payment (minus 0.5% fee) to seller
+ * 3. Transfers payment (minus 1% fee) to seller
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
@@ -70,8 +70,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(410).json({ error: 'Listing cancelled' })
     }
 
-    // Calculate fee (0.5% for escrow mode)
-    const FEE_PERCENT = 0.5
+    // Calculate fee (1% for escrow mode)
+    const FEE_PERCENT = 1
     const price = BigInt(listing.price)
     const fee = (price * BigInt(Math.floor(FEE_PERCENT * 100))) / 10000n
     const totalWithFee = price + fee
@@ -100,7 +100,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       instructions: [
         `Send exactly ${totalWithFee} sats to escrow address: ${listing.escrowAddress}`,
         'Once payment is received, the punk will be automatically transferred to you',
-        `The seller will receive ${price} sats (${totalWithFee} - ${FEE_PERCENT}% fee)`,
+        `The seller will receive ${price} sats (${totalWithFee} - 1% fee)`,
         'The process is fully automatic and should complete within 2-3 minutes'
       ]
     }

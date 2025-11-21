@@ -605,7 +605,7 @@ async function listPunk(punk: PunkState) {
     '   • You can go offline after listing\n' +
     '   • Server holds punk temporarily\n' +
     '   • Automatic sale execution\n' +
-    '   • 0.5% marketplace fee\n\n' +
+    '   • 1% marketplace fee\n\n' +
     '❌ CANCEL = P2P MODE (Advanced)\n' +
     '   • Completely trustless\n' +
     '   • You must stay online\n' +

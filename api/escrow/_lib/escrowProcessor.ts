@@ -148,7 +148,7 @@ export async function processBuyerPayments(wallet: any): Promise<number> {
   for (const listing of listings) {
     try {
       // Calculate expected payment
-      const FEE_PERCENT = 0.5
+      const FEE_PERCENT = 1
       const price = BigInt(listing.price)
       const fee = (price * BigInt(Math.floor(FEE_PERCENT * 100))) / 10000n
       const expectedPayment = price + fee
@@ -197,7 +197,7 @@ async function executeAtomicSwap(
     console.log(`   Transferring punk to buyer: ${listing.buyerAddress}`)
     console.log(`   Transferring payment to seller: ${listing.sellerArkAddress}`)
     console.log(`   Seller receives: ${sellerAmount} sats`)
-    console.log(`   Marketplace fee: ${fee} sats (${0.5}%)`)
+    console.log(`   Marketplace fee: ${fee} sats (1%)`)
 
     // Check wallet balance before executing swap
     const balance = await wallet.getBalance()
