@@ -68,12 +68,6 @@
                 >
                   🗑️ Delist
                 </button>
-                <button
-                  @click="transferPunk(punk)"
-                  class="btn-action btn-transfer"
-                >
-                  📤 Transfer
-                </button>
               </div>
             </div>
           </div>
