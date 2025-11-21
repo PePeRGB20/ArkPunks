@@ -362,7 +362,11 @@ async function buyPunk(punk: MarketplaceListing) {
     }
 
     const buyerPubkey = getPublicKey(hex.decode(privateKeyHex))
-    const buyerArkAddress = currentWallet.arkAddress
+    const buyerArkAddress = currentWallet.arkadeAddress
+
+    if (!buyerArkAddress) {
+      throw new Error('Arkade address not available')
+    }
 
     // Initiate escrow purchase
     console.log(`📋 Requesting purchase for punk ${punk.punkId}`)
