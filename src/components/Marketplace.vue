@@ -3,10 +3,10 @@
     <h2>Marketplace</h2>
     <p class="subtitle">List and browse ArkPunks</p>
 
-    <!-- TEMPORARY: Marketplace buy feature disabled -->
-    <div class="marketplace-notice">
-      <strong>⚠️ Notice:</strong> Marketplace buying is temporarily disabled while we implement atomic swaps.
-      You can still browse listings and list your own punks for sale.
+    <!-- Marketplace features notice -->
+    <div class="marketplace-notice success">
+      <strong>🛡️ Escrow Mode Available!</strong> You can now list punks for sale using our secure escrow system.
+      Sell your punks even while offline - the server handles everything automatically!
     </div>
 
     <div v-if="loading" class="loading-state">
@@ -44,6 +44,12 @@
             <span v-if="punk.isOfficial && punk.officialIndex !== undefined" class="official-index">
               #{{ punk.officialIndex }}
             </span>
+            <span v-if="punk.saleMode === 'escrow'" class="sale-mode-badge escrow" title="Escrow Mode - Seller can go offline">
+              🛡️ ESCROW
+            </span>
+            <span v-else class="sale-mode-badge p2p" title="P2P Mode - Direct peer-to-peer">
+              🤝 P2P
+            </span>
           </div>
 
           <div class="punk-attributes">
@@ -62,7 +68,12 @@
               <span class="price-value">{{ formatSats(punk.listingPrice) }} sats</span>
             </div>
             <div class="fee-info">
-              <small>+ 1% marketplace fee ({{ formatSats(calculateFee(punk.listingPrice)) }} sats)</small>
+              <small v-if="punk.saleMode === 'escrow'">
+                + 0.5% marketplace fee ({{ formatSats(calculateFee(punk.listingPrice, 0.5)) }} sats)
+              </small>
+              <small v-else>
+                + 1% marketplace fee ({{ formatSats(calculateFee(punk.listingPrice, 1)) }} sats)
+              </small>
             </div>
           </div>
 
@@ -143,15 +154,14 @@ const buying = ref(false)
 const currentPage = ref(1)
 const itemsPerPage = 24
 
-// 1% marketplace fee
-const MARKETPLACE_FEE_PERCENT = 1
-
-function calculateFee(price: bigint): bigint {
-  return (price * BigInt(MARKETPLACE_FEE_PERCENT)) / 100n
+function calculateFee(price: bigint, feePercent: number = 1): bigint {
+  // Convert fee percent to basis points (0.5% = 50 basis points)
+  const basisPoints = Math.floor(feePercent * 100)
+  return (price * BigInt(basisPoints)) / 10000n
 }
 
-function calculateTotal(price: bigint): bigint {
-  return price + calculateFee(price)
+function calculateTotal(price: bigint, feePercent: number = 1): bigint {
+  return price + calculateFee(price, feePercent)
 }
 
 function formatPubkey(pubkey: string): string {
@@ -521,6 +531,27 @@ h2 {
   font-weight: bold;
 }
 
+.sale-mode-badge {
+  display: inline-block;
+  padding: 3px 6px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+.sale-mode-badge.escrow {
+  background: rgba(59, 130, 246, 0.2);
+  border: 1px solid #3b82f6;
+  color: #3b82f6;
+}
+
+.sale-mode-badge.p2p {
+  background: rgba(168, 85, 247, 0.2);
+  border: 1px solid #a855f7;
+  color: #a855f7;
+}
+
 .type-alien { background: #88ff88; color: #000; }
 .type-ape { background: #8b4513; color: #fff; }
 .type-zombie { background: #88cc88; color: #000; }
@@ -623,6 +654,12 @@ h2 {
   margin-bottom: 24px;
   color: #ffc107;
   text-align: center;
+}
+
+.marketplace-notice.success {
+  background: rgba(16, 185, 129, 0.1);
+  border-color: #10b981;
+  color: #10b981;
 }
 
 .marketplace-notice strong {

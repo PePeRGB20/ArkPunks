@@ -19,6 +19,8 @@ const KIND_PUNK_LISTING = 1401  // Marketplace listing (was 1338)
 const KIND_PUNK_SOLD = 1402     // Punk sold event (was 1339)
 const KIND_PUNK_TRANSFER = 1403 // Direct punk transfer (was 1340)
 
+export type SaleMode = 'escrow' | 'p2p'
+
 export interface MarketplaceListing {
   punkId: string
   owner: string // Nostr pubkey
@@ -27,6 +29,8 @@ export interface MarketplaceListing {
   metadata: any
   vtxoOutpoint: string
   listedAt: number
+  saleMode?: SaleMode // 'escrow' (server-managed) or 'p2p' (HTLC)
+  escrowAddress?: string // Only for escrow mode
 }
 
 /**
@@ -92,6 +96,8 @@ export async function getMarketplaceListings(): Promise<MarketplaceListing[]> {
         const vtxoTag = event.tags.find(t => t[0] === 'vtxo')
         const compressedTag = event.tags.find(t => t[0] === 'compressed')
         const arkAddressTag = event.tags.find(t => t[0] === 'ark_address')
+        const saleModeTag = event.tags.find(t => t[0] === 'sale_mode')
+        const escrowAddressTag = event.tags.find(t => t[0] === 'escrow_address')
 
         if (!punkIdTag || !priceTag) {
           continue
@@ -99,6 +105,8 @@ export async function getMarketplaceListings(): Promise<MarketplaceListing[]> {
 
         const punkId = punkIdTag[1]
         const price = BigInt(priceTag[1])
+        const saleMode = (saleModeTag?.[1] as SaleMode) || 'p2p' // Default to p2p for backward compatibility
+        const escrowAddress = escrowAddressTag?.[1]
 
         // Skip delisted punks (price = 0)
         if (price === 0n) {
@@ -147,7 +155,9 @@ export async function getMarketplaceListings(): Promise<MarketplaceListing[]> {
           listingPrice: price,
           metadata,
           vtxoOutpoint,
-          listedAt: event.created_at
+          listedAt: event.created_at,
+          saleMode,
+          escrowAddress
         })
 
         console.log(`   ✅ Active listing: ${metadata.name} (${price.toLocaleString()} sats) by ${event.pubkey.slice(0, 8)}...`)
@@ -180,25 +190,35 @@ export async function listPunkForSale(
   vtxoOutpoint: string,
   compressedHex: string,
   privateKey: string,
-  arkAddress: string
+  arkAddress: string,
+  saleMode: SaleMode = 'p2p',
+  escrowAddress?: string
 ): Promise<boolean> {
   const pool = new SimplePool()
 
   try {
     const pubkey = getPublicKey(hex.decode(privateKey))
 
+    const tags: string[][] = [
+      ['t', 'arkade-punk-listing'],
+      ['punk_id', punkId],
+      ['price', price.toString()],
+      ['vtxo', vtxoOutpoint],
+      ['compressed', compressedHex],
+      ['ark_address', arkAddress],
+      ['sale_mode', saleMode]
+    ]
+
+    // Add escrow address if in escrow mode
+    if (saleMode === 'escrow' && escrowAddress) {
+      tags.push(['escrow_address', escrowAddress])
+    }
+
     const eventTemplate: EventTemplate = {
       kind: KIND_PUNK_LISTING,
       created_at: Math.floor(Date.now() / 1000),
-      tags: [
-        ['t', 'arkade-punk-listing'],
-        ['punk_id', punkId],
-        ['price', price.toString()],
-        ['vtxo', vtxoOutpoint],
-        ['compressed', compressedHex],
-        ['ark_address', arkAddress]
-      ],
-      content: `Punk ${punkId} listed for ${price} sats`
+      tags,
+      content: `Punk ${punkId} listed for ${price} sats (${saleMode === 'escrow' ? 'Escrow Mode' : 'P2P Mode'})`
     }
 
     const signedEvent = finalizeEvent(eventTemplate, hex.decode(privateKey))

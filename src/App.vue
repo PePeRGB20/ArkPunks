@@ -598,6 +598,29 @@ async function listPunk(punk: PunkState) {
     return
   }
 
+  // Ask for sale mode
+  const modeChoice = confirm(
+    '🛡️ Choose Sale Mode:\n\n' +
+    '✅ OK = ESCROW MODE (Recommended)\n' +
+    '   • You can go offline after listing\n' +
+    '   • Server holds punk temporarily\n' +
+    '   • Automatic sale execution\n' +
+    '   • 0.5% marketplace fee\n\n' +
+    '❌ CANCEL = P2P MODE (Advanced)\n' +
+    '   • Completely trustless\n' +
+    '   • You must stay online\n' +
+    '   • Uses HTLC contracts\n' +
+    '   • Coming soon!'
+  )
+
+  const saleMode = modeChoice ? 'escrow' : 'p2p'
+
+  // P2P mode not yet implemented
+  if (saleMode === 'p2p') {
+    alert('❌ P2P Mode (HTLC) coming soon!\n\nFor now, please use Escrow Mode.')
+    return
+  }
+
   const priceInput = prompt('Enter listing price in sats (minimum 10,000):', '10000')
   if (!priceInput) return
 
@@ -609,6 +632,7 @@ async function listPunk(punk: PunkState) {
 
   try {
     console.log('📝 Listing punk for sale...')
+    console.log('   Sale mode:', saleMode)
     console.log('   Punk metadata:', punk.metadata)
 
     // Get private key from localStorage
@@ -616,6 +640,8 @@ async function listPunk(punk: PunkState) {
     if (!privateKeyHex) {
       throw new Error('Private key not found')
     }
+
+    const myPubkey = getPublicKey(hex.decode(privateKeyHex))
 
     // Compress punk metadata
     const compressed = compressPunkMetadata(punk.metadata)
@@ -636,6 +662,34 @@ async function listPunk(punk: PunkState) {
     const arkAddress = wallet.arkadeAddress
     console.log('   Ark address:', arkAddress)
 
+    let escrowAddress: string | undefined
+
+    // If escrow mode, create listing via API
+    if (saleMode === 'escrow') {
+      console.log('📡 Creating escrow listing...')
+      const { listPunkInEscrow } = await import('./utils/escrowApi')
+
+      const escrowListing = await listPunkInEscrow({
+        punkId: punk.punkId,
+        sellerPubkey: myPubkey,
+        sellerArkAddress: arkAddress,
+        price: price.toString(),
+        punkVtxoOutpoint: punk.vtxoOutpoint
+      })
+
+      escrowAddress = escrowListing.escrowAddress
+      console.log('✅ Escrow listing created')
+      console.log('   Escrow address:', escrowAddress)
+
+      // Show instructions to seller
+      alert(
+        `🛡️ Escrow Listing Created!\n\n` +
+        `${escrowListing.message}\n\n` +
+        `📋 Next steps:\n` +
+        escrowListing.instructions.join('\n')
+      )
+    }
+
     // Publish listing to Nostr
     const success = await listPunkForSale(
       punk.punkId,
@@ -643,7 +697,9 @@ async function listPunk(punk: PunkState) {
       punk.vtxoOutpoint,
       compressedHex,
       privateKeyHex,
-      arkAddress
+      arkAddress,
+      saleMode,
+      escrowAddress
     )
 
     if (success) {

@@ -25,6 +25,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
+    "@vercel/node": "^5.5.8",
     "@vitejs/plugin-vue": "^5.0.0",
     "@vue/eslint-config-typescript": "^12.0.0",
     "eslint": "^8.54.0",
