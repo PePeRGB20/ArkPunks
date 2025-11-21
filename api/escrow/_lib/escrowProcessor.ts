@@ -33,7 +33,9 @@ export async function initEscrowWallet() {
     if (decoded.type !== 'nsec') {
       throw new Error('Invalid Nostr private key format')
     }
-    privateKeyHex = decoded.data as string
+    // Convert Uint8Array to hex string
+    const bytes = decoded.data as Uint8Array
+    privateKeyHex = Buffer.from(bytes).toString('hex')
     console.log('   ✅ Converted to hex')
   } else {
     privateKeyHex = privateKey
@@ -221,10 +223,7 @@ async function executeAtomicSwap(
     // In Arkade, we need to send the specific VTXO
     // For now, we'll use sendBitcoin which creates a new VTXO for the buyer
     // TODO: Use proper VTXO transfer that maintains punk metadata
-
-    // Parse punk VTXO outpoint
-    const [punkTxid, punkVoutStr] = listing.punkVtxoOutpoint.split(':')
-    const punkVout = parseInt(punkVoutStr)
+    // TODO: Parse and use punk VTXO outpoint: listing.punkVtxoOutpoint
 
     console.log(`   Step 1: Sending punk VTXO to buyer...`)
 
