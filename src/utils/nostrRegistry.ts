@@ -52,15 +52,21 @@ export async function getNostrSupply(): Promise<{
     console.log(`   Filtering for network: ${currentNetwork}`)
     console.log(`   VITE_ARKADE_NETWORK env var: "${import.meta.env.VITE_ARKADE_NETWORK}"`)
 
-    // Fetch all punk mint events (kind 1400) for current network only
-    const events = await pool.querySync(RELAYS, {
+    // Fetch all punk mint events (kind 1400)
+    // NOTE: We fetch ALL and filter client-side because relay tag filters are unreliable
+    const allEvents = await pool.querySync(RELAYS, {
       kinds: [KIND_PUNK_MINT],
       '#t': ['arkade-punk'],
-      '#network': [currentNetwork], // Filter by network tag
       limit: PUNK_SUPPLY_CONFIG.MAX_TOTAL_PUNKS + 100 // Fetch a bit more to be safe
     })
 
-    console.log(`   Found ${events.length} punk mint events on Nostr`)
+    // Filter by network client-side
+    const events = allEvents.filter(e => {
+      const networkTag = e.tags.find(t => t[0] === 'network')
+      return networkTag?.[1] === currentNetwork
+    })
+
+    console.log(`   Found ${events.length} punk mint events on Nostr (filtered from ${allEvents.length} total)`)
 
     // Debug: Log first few events to see their network tags
     if (events.length > 0) {

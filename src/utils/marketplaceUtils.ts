@@ -62,20 +62,30 @@ export async function getMarketplaceListings(): Promise<MarketplaceListing[]> {
     }
 
     // Query for ALL listing events (including delist events) AND sold events
-    const [listingEvents, soldEvents] = await Promise.all([
+    // NOTE: We fetch ALL events and filter client-side because relay tag filters are unreliable
+    const [allListingEvents, allSoldEvents] = await Promise.all([
       pool.querySync(RELAYS, {
         kinds: [KIND_PUNK_LISTING],
-        '#network': [currentNetwork], // Filter by network
         limit: 1000
       }),
       pool.querySync(RELAYS, {
         kinds: [KIND_PUNK_SOLD],
-        '#network': [currentNetwork], // Filter by network
         limit: 1000
       })
     ])
 
-    console.log(`   Found ${listingEvents.length} listing events (with network filter), ${soldEvents.length} sold events`)
+    // Filter by network client-side (relay filters don't work reliably)
+    const listingEvents = allListingEvents.filter(e => {
+      const networkTag = e.tags.find(t => t[0] === 'network')
+      return networkTag?.[1] === currentNetwork
+    })
+
+    const soldEvents = allSoldEvents.filter(e => {
+      const networkTag = e.tags.find(t => t[0] === 'network')
+      return networkTag?.[1] === currentNetwork
+    })
+
+    console.log(`   Found ${listingEvents.length} listing events (filtered from ${allListingEvents.length} total), ${soldEvents.length} sold events`)
 
     // Debug: Log first few listings
     if (listingEvents.length > 0) {
@@ -492,21 +502,31 @@ export async function syncPunksFromNostr(
     // Determine current network (default to mainnet if not set)
     const currentNetwork = import.meta.env.VITE_ARKADE_NETWORK || 'mainnet'
 
-    const [soldEvents, transferEvents] = await Promise.all([
+    // NOTE: We fetch ALL and filter client-side because relay tag filters are unreliable
+    const [allSoldEvents, allTransferEvents] = await Promise.all([
       pool.querySync(RELAYS, {
         kinds: [KIND_PUNK_SOLD],
-        '#network': [currentNetwork], // Filter by network
         limit: 1000
       }),
       pool.querySync(RELAYS, {
         kinds: [KIND_PUNK_TRANSFER],
-        '#network': [currentNetwork], // Filter by network
         limit: 1000
       })
     ])
 
-    console.log(`   Found ${soldEvents.length} sold events`)
-    console.log(`   Found ${transferEvents.length} transfer events`)
+    // Filter by network client-side
+    const soldEvents = allSoldEvents.filter(e => {
+      const networkTag = e.tags.find(t => t[0] === 'network')
+      return networkTag?.[1] === currentNetwork
+    })
+
+    const transferEvents = allTransferEvents.filter(e => {
+      const networkTag = e.tags.find(t => t[0] === 'network')
+      return networkTag?.[1] === currentNetwork
+    })
+
+    console.log(`   Found ${soldEvents.length} sold events (filtered from ${allSoldEvents.length} total)`)
+    console.log(`   Found ${transferEvents.length} transfer events (filtered from ${allTransferEvents.length} total)`)
 
     // Build ownership history from sold events and transfers
     const punkOwnership = new Map<string, {
