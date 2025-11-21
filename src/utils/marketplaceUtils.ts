@@ -217,10 +217,17 @@ export async function listPunkForSale(
   const pool = new SimplePool()
 
   try {
+    console.log('🔵 listPunkForSale: Starting...')
+    console.log('   Punk ID:', punkId)
+    console.log('   Price:', price.toString())
+    console.log('   Sale mode:', saleMode)
+
     const pubkey = getPublicKey(hex.decode(privateKey))
+    console.log('   Pubkey:', pubkey)
 
     // Determine current network for event tagging
     const currentNetwork = import.meta.env.VITE_ARKADE_NETWORK || 'mainnet'
+    console.log('   Network tag:', currentNetwork)
 
     const tags: string[][] = [
       ['t', 'arkade-punk-listing'],
@@ -236,6 +243,7 @@ export async function listPunkForSale(
     // Add escrow address if in escrow mode
     if (saleMode === 'escrow' && escrowAddress) {
       tags.push(['escrow_address', escrowAddress])
+      console.log('   Escrow address:', escrowAddress)
     }
 
     const eventTemplate: EventTemplate = {
@@ -245,10 +253,18 @@ export async function listPunkForSale(
       content: `Punk ${punkId} listed for ${price} sats (${saleMode === 'escrow' ? 'Escrow Mode' : 'P2P Mode'})`
     }
 
+    console.log('   Event template created:', eventTemplate)
+
     const signedEvent = finalizeEvent(eventTemplate, hex.decode(privateKey))
+    console.log('   Event signed:', signedEvent.id)
 
     // Publish to relays
-    await Promise.any(pool.publish(RELAYS, signedEvent))
+    console.log('   Publishing to', RELAYS.length, 'relays...')
+    const publishPromises = pool.publish(RELAYS, signedEvent)
+    console.log('   Publish promises:', publishPromises.length)
+
+    await Promise.any(publishPromises)
+    console.log('✅ Published to at least one relay')
 
     return true
 
