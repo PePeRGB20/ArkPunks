@@ -14,12 +14,18 @@ async function generateEscrowWallet() {
   console.log('🔐 Generating new escrow wallet...\n')
 
   try {
-    // Import Arkade SDK
+    // Import Arkade SDK and Nostr tools
     const { Wallet, SingleKey } = await import('@arkade-os/sdk')
+    const { nip19, getPublicKey } = await import('nostr-tools')
 
     // Generate random 32-byte private key
     const privateKey = randomBytes(32)
     const privateKeyHex = privateKey.toString('hex')
+
+    // Convert to Nostr format (nsec/npub)
+    const nsec = nip19.nsecEncode(privateKeyHex)
+    const publicKeyHex = getPublicKey(privateKey)
+    const npub = nip19.npubEncode(publicKeyHex)
 
     console.log('✅ Private key generated')
     console.log('   Keep this SECRET and secure!\n')

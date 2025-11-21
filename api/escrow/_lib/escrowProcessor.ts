@@ -15,14 +15,29 @@ import { getAllEscrowListings, markAsDeposited, markAsSold } from './escrowStore
  * Initialize escrow wallet from environment
  */
 export async function initEscrowWallet() {
-  const privateKeyHex = process.env.ESCROW_WALLET_PRIVATE_KEY
+  const privateKey = process.env.ESCROW_WALLET_PRIVATE_KEY
 
-  if (!privateKeyHex) {
+  if (!privateKey) {
     throw new Error('ESCROW_WALLET_PRIVATE_KEY not configured')
   }
 
   // Import SDK
   const { Wallet, SingleKey } = await import('@arkade-os/sdk')
+
+  // Convert private key to hex if it's in Nostr format (nsec...)
+  let privateKeyHex: string
+  if (privateKey.startsWith('nsec')) {
+    console.log('   Detected Nostr key format (nsec), converting to hex...')
+    const { nip19 } = await import('nostr-tools')
+    const decoded = nip19.decode(privateKey)
+    if (decoded.type !== 'nsec') {
+      throw new Error('Invalid Nostr private key format')
+    }
+    privateKeyHex = decoded.data as string
+    console.log('   ✅ Converted to hex')
+  } else {
+    privateKeyHex = privateKey
+  }
 
   // Create wallet identity
   const identity = SingleKey.fromHex(privateKeyHex)
