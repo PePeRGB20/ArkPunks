@@ -9,7 +9,7 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { getEscrowListing } from './_lib/escrowStore'
+import { getEscrowListing } from './_lib/escrowStore.js'
 
 interface BuyRequest {
   punkId: string

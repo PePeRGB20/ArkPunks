@@ -7,7 +7,7 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { getEscrowListing, getAllEscrowListings } from './_lib/escrowStore'
+import { getEscrowListing, getAllEscrowListings } from './_lib/escrowStore.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Only allow GET

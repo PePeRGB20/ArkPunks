@@ -8,8 +8,8 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { getEscrowAddress } from './_lib/escrowWallet'
-import { createEscrowListing } from './_lib/escrowStore'
+import { getEscrowAddress } from './_lib/escrowWallet.js'
+import { createEscrowListing } from './_lib/escrowStore.js'
 
 interface ListRequest {
   punkId: string
