@@ -4,53 +4,113 @@
  * POST /api/escrow/buy
  *
  * Allows a buyer to purchase a punk that is held in escrow.
+ * This endpoint registers the purchase intent and returns instructions.
  *
- * NOTE: This endpoint is not yet implemented. Purchases must be handled manually for now.
+ * The actual transfer is handled by the monitoring service which:
+ * 1. Detects when buyer sends payment to escrow address
+ * 2. Transfers punk VTXO to buyer
+ * 3. Transfers payment (minus 0.5% fee) to seller
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { getEscrowListing } from './_lib/escrowStore.js'
+import { getEscrowListing, updateEscrowStatus } from './_lib/escrowStore.js'
 
 interface BuyRequest {
   punkId: string
   buyerPubkey: string
   buyerArkAddress: string
-  paymentTxid: string // TXID of the buyer's payment to escrow
+}
+
+interface BuyResponse {
+  success: boolean
+  punkId: string
+  price: string
+  totalWithFee: string
+  fee: string
+  feePercent: number
+  escrowAddress: string
+  instructions: string[]
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  console.log('🛒 Escrow buy endpoint called')
+  console.log('   Method:', req.method)
+
   // Only allow POST
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
   try {
-    const { punkId } = req.body as BuyRequest
+    const { punkId, buyerPubkey, buyerArkAddress } = req.body as BuyRequest
 
-    // Get escrow listing to verify it exists
+    console.log('   Buy request for punk:', punkId)
+    console.log('   Buyer:', buyerPubkey.slice(0, 16) + '...')
+
+    // Validate required fields
+    if (!punkId || !buyerPubkey || !buyerArkAddress) {
+      return res.status(400).json({
+        error: 'Missing required fields',
+        required: ['punkId', 'buyerPubkey', 'buyerArkAddress']
+      })
+    }
+
+    // Get escrow listing
     const listing = getEscrowListing(punkId)
     if (!listing) {
       return res.status(404).json({ error: 'Punk not found in escrow' })
     }
 
-    // Return "not implemented" for now
-    // Manual process: Buyer sends payment to escrow address,
-    // then admin manually transfers punk and payment
-    return res.status(501).json({
-      error: 'Automatic purchases not yet implemented',
-      message: 'Please contact the seller directly to complete the purchase',
-      listing: {
-        punkId: listing.punkId,
-        price: listing.price,
-        escrowAddress: listing.escrowAddress,
-        sellerAddress: listing.sellerArkAddress
-      }
+    // Check listing status
+    if (listing.status === 'sold') {
+      return res.status(409).json({ error: 'Punk already sold' })
+    }
+
+    if (listing.status === 'cancelled') {
+      return res.status(410).json({ error: 'Listing cancelled' })
+    }
+
+    // Calculate fee (0.5% for escrow mode)
+    const FEE_PERCENT = 0.5
+    const price = BigInt(listing.price)
+    const fee = (price * BigInt(Math.floor(FEE_PERCENT * 100))) / 10000n
+    const totalWithFee = price + fee
+
+    console.log(`   Price: ${price} sats`)
+    console.log(`   Fee (${FEE_PERCENT}%): ${fee} sats`)
+    console.log(`   Total: ${totalWithFee} sats`)
+
+    // Update listing with buyer info (status stays 'pending' until payment received)
+    updateEscrowStatus(punkId, listing.status, {
+      buyerPubkey,
+      buyerAddress: buyerArkAddress
     })
 
+    console.log('✅ Buy intent registered')
+
+    // Return payment instructions to buyer
+    const response: BuyResponse = {
+      success: true,
+      punkId,
+      price: price.toString(),
+      totalWithFee: totalWithFee.toString(),
+      fee: fee.toString(),
+      feePercent: FEE_PERCENT,
+      escrowAddress: listing.escrowAddress,
+      instructions: [
+        `Send exactly ${totalWithFee} sats to escrow address: ${listing.escrowAddress}`,
+        'Once payment is received, the punk will be automatically transferred to you',
+        `The seller will receive ${price} sats (${totalWithFee} - ${FEE_PERCENT}% fee)`,
+        'The process is fully automatic and should complete within 2-3 minutes'
+      ]
+    }
+
+    return res.status(200).json(response)
+
   } catch (error: any) {
-    console.error('❌ Error processing purchase:', error)
+    console.error('❌ Error processing buy request:', error)
     return res.status(500).json({
-      error: 'Failed to process purchase',
+      error: 'Failed to process buy request',
       details: error.message
     })
   }

@@ -40,22 +40,17 @@ export interface BuyPunkRequest {
   punkId: string
   buyerPubkey: string
   buyerArkAddress: string
-  paymentTxid: string
 }
 
 export interface BuyPunkResponse {
   success: boolean
   punkId: string
-  transactions: {
-    punkTransfer: string
-    sellerPayout: string
-  }
-  amounts: {
-    price: string
-    sellerPayout: string
-    marketplaceFee: string
-  }
-  message: string
+  price: string
+  totalWithFee: string
+  fee: string
+  feePercent: number
+  escrowAddress: string
+  instructions: string[]
 }
 
 export interface EscrowStatusResponse {
