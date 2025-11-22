@@ -38,24 +38,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const currentNetwork = 'mainnet'
 
     console.log('   Fetching escrow listings from Nostr...')
-    console.log('   Querying for escrow_address:', ESCROW_ADDRESS)
+    console.log('   Target escrow_address:', ESCROW_ADDRESS)
 
+    // Query ALL punk listings (relays don't index escrow_address tag)
     const allListingEvents = await pool.querySync(RELAYS, {
       kinds: [KIND_PUNK_LISTING],
-      '#escrow_address': [ESCROW_ADDRESS],
       limit: 1000
     })
 
-    console.log(`   Found ${allListingEvents.length} listing events for this escrow`)
+    console.log(`   Found ${allListingEvents.length} total listing events`)
 
-    // Filter for active escrow listings
+    // Filter for active escrow listings pointing to this escrow
     const escrowListings = allListingEvents.filter(e => {
       const networkTag = e.tags.find(t => t[0] === 'network')
       const saleModeTag = e.tags.find(t => t[0] === 'sale_mode')
       const priceTag = e.tags.find(t => t[0] === 'price')
+      const escrowAddressTag = e.tags.find(t => t[0] === 'escrow_address')
 
       return networkTag?.[1] === currentNetwork &&
              saleModeTag?.[1] === 'escrow' &&
+             escrowAddressTag?.[1] === ESCROW_ADDRESS &&
              priceTag?.[1] !== '0' // Not already delisted
     })
 
