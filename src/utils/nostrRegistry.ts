@@ -60,13 +60,16 @@ export async function getNostrSupply(): Promise<{
       limit: PUNK_SUPPLY_CONFIG.MAX_TOTAL_PUNKS + 100 // Fetch a bit more to be safe
     })
 
-    // Filter by network client-side
+    // Filter by network AND server signature (only official punks)
     const events = allEvents.filter(e => {
       const networkTag = e.tags.find(t => t[0] === 'network')
-      return networkTag?.[1] === currentNetwork
+      const serverSigTag = e.tags.find(t => t[0] === 'server_sig')
+
+      // Must have correct network AND server signature to be counted
+      return networkTag?.[1] === currentNetwork && serverSigTag
     })
 
-    console.log(`   Found ${events.length} punk mint events on Nostr (filtered from ${allEvents.length} total)`)
+    console.log(`   Found ${events.length} official punk mint events on Nostr (filtered from ${allEvents.length} total)`)
 
     // Debug: Log first few events to see their network tags
     if (events.length > 0) {
