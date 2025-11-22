@@ -68,7 +68,8 @@ async function writeStore(store: EscrowStore): Promise<void> {
   await put(BLOB_FILENAME, JSON.stringify(store, null, 2), {
     access: 'public',
     contentType: 'application/json',
-    addRandomSuffix: false
+    addRandomSuffix: false,
+    allowOverwrite: true
   })
 }
 
