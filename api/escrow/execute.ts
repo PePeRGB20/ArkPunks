@@ -58,9 +58,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(404).json({ error: 'Punk not found in escrow' })
     }
 
+    // Debug: Log full buyer verification details
+    console.log('🔍 BUYER VERIFICATION:')
+    console.log('   Request buyerPubkey:', buyerPubkey)
+    console.log('   Stored buyerPubkey:', listing.buyerPubkey)
+    console.log('   Match:', listing.buyerPubkey === buyerPubkey)
+
     // Verify buyer matches
     if (listing.buyerPubkey !== buyerPubkey) {
-      return res.status(403).json({ error: 'Not authorized - buyer mismatch' })
+      return res.status(403).json({
+        error: 'Not authorized - buyer mismatch',
+        debug: {
+          requestPubkey: buyerPubkey,
+          storedPubkey: listing.buyerPubkey
+        }
+      })
     }
 
     // Check listing status
