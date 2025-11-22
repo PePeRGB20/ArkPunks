@@ -530,18 +530,22 @@ export async function syncPunksFromNostr(
     console.log(`   Found ${mintEventsByOwner.length} mint events by wallet address`)
     console.log(`   Total unique mint events: ${mintEvents.length}`)
 
-    // Query for all sold events and transfer events
+    // Query for all sold events, transfer events, AND listing events
     // Determine current network (default to mainnet if not set)
     const currentNetwork = import.meta.env.VITE_ARKADE_NETWORK || 'mainnet'
 
     // NOTE: We fetch ALL and filter client-side because relay tag filters are unreliable
-    const [allSoldEvents, allTransferEvents] = await Promise.all([
+    const [allSoldEvents, allTransferEvents, allListingEvents] = await Promise.all([
       pool.querySync(RELAYS, {
         kinds: [KIND_PUNK_SOLD],
         limit: 1000
       }),
       pool.querySync(RELAYS, {
         kinds: [KIND_PUNK_TRANSFER],
+        limit: 1000
+      }),
+      pool.querySync(RELAYS, {
+        kinds: [KIND_PUNK_LISTING],
         limit: 1000
       })
     ])
@@ -557,14 +561,43 @@ export async function syncPunksFromNostr(
       return networkTag?.[1] === currentNetwork
     })
 
+    const listingEvents = allListingEvents.filter(e => {
+      const networkTag = e.tags.find(t => t[0] === 'network')
+      return networkTag?.[1] === currentNetwork
+    })
+
     console.log(`   Found ${soldEvents.length} sold events (filtered from ${allSoldEvents.length} total)`)
     console.log(`   Found ${transferEvents.length} transfer events (filtered from ${allTransferEvents.length} total)`)
+    console.log(`   Found ${listingEvents.length} listing events`)
+
+    // Check for active escrow listings by this user
+    // These are punks currently held in escrow (listed but not sold)
+    const myEscrowListings = new Set<string>()
+    for (const event of listingEvents) {
+      // Only check listings by this user in escrow mode
+      if (event.pubkey !== myPubkey) continue
+
+      const saleModeTag = event.tags.find(t => t[0] === 'sale_mode')
+      const priceTag = event.tags.find(t => t[0] === 'price')
+      const punkIdTag = event.tags.find(t => t[0] === 'punk_id')
+
+      // Must be escrow mode, active (price > 0), and have punk ID
+      if (saleModeTag?.[1] === 'escrow' &&
+          priceTag &&
+          BigInt(priceTag[1]) > 0n &&
+          punkIdTag) {
+        myEscrowListings.add(punkIdTag[1])
+        console.log(`   📦 Found escrow listing: ${punkIdTag[1].slice(0, 8)}...`)
+      }
+    }
+
+    console.log(`   Found ${myEscrowListings.size} active escrow listings by this user`)
 
     // Build ownership history from sold events and transfers
     const punkOwnership = new Map<string, {
       currentOwner: string | null // null if transferred away
       lastTransferTime: number
-      inEscrow?: boolean // true if sold to escrow
+      inEscrow?: boolean // true if in escrow
     }>()
 
     // Process sold events (marketplace sales)
@@ -664,8 +697,11 @@ export async function syncPunksFromNostr(
         const punkId = punkIdTag[1]
         const ownership = punkOwnership.get(punkId)
 
+        // Check if this punk is in escrow (has active escrow listing)
+        const isInEscrow = myEscrowListings.has(punkId)
+
         // Skip if sold and not bought back (but include escrow-held punks)
-        if (ownership && ownership.currentOwner !== myPubkey) {
+        if (ownership && ownership.currentOwner !== myPubkey && !isInEscrow) {
           console.log(`   Skipping ${punkId}: sold to ${ownership.currentOwner?.slice(0, 8)}...`)
           continue
         }
@@ -690,10 +726,10 @@ export async function syncPunksFromNostr(
           owner: walletAddress,
           metadata,
           vtxoOutpoint,
-          inEscrow: ownership?.inEscrow || false
+          inEscrow: isInEscrow || ownership?.inEscrow || false
         })
 
-        if (ownership?.inEscrow) {
+        if (isInEscrow) {
           console.log(`   ✅ Recovered (in escrow): ${metadata.name}`)
         } else {
           console.log(`   ✅ Recovered: ${metadata.name}`)
@@ -750,15 +786,17 @@ export async function syncPunksFromNostr(
                 const vtxoOutpoint = vtxoTag?.[1] || `${punkId}:0`
 
                 const ownership = punkOwnership.get(punkId)
+                const isInEscrow = myEscrowListings.has(punkId)
+
                 recoveredPunks.push({
                   punkId,
                   owner: walletAddress,
                   metadata,
                   vtxoOutpoint,
-                  inEscrow: ownership?.inEscrow || false
+                  inEscrow: isInEscrow || ownership?.inEscrow || false
                 })
 
-                if (ownership?.inEscrow) {
+                if (isInEscrow) {
                   console.log(`   ✅ Recovered bought punk (in escrow): ${metadata.name}`)
                 } else {
                   console.log(`   ✅ Recovered bought punk: ${metadata.name}`)
