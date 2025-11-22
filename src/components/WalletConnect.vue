@@ -211,9 +211,10 @@
           📤 Send Sats
         </button>
 
-        <button @click="showExitModal = true" class="btn btn-exit-l1">
+        <!-- Exit to L1 button hidden - users should not use this for now -->
+        <!-- <button @click="showExitModal = true" class="btn btn-exit-l1">
           🟠 Exit to L1
-        </button>
+        </button> -->
       </div>
 
       <!-- Send Modal -->
@@ -709,7 +710,7 @@ async function forceSettle() {
     `What You Can Do:\n` +
     `• Click "🔄 Refresh" periodically to check status\n` +
     `• Wait for the Arkade round to complete\n` +
-    `• If urgent, use "🟠 Exit to L1" to recover funds on-chain\n\n` +
+    `• Be patient - the funds are safe and will settle automatically\n\n` +
     `Note: There is no manual way to force VTXOs to settle - this happens automatically on the Arkade server when the round completes.`
   )
 }
