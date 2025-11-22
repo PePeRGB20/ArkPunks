@@ -11,8 +11,8 @@ import { RestArkProvider, RestIndexerProvider } from '@arkade-os/sdk'
 import type { ArkadeWalletInterface } from '@/utils/arkadeWallet'
 import { getActiveConfig } from '@/config/arkade'
 
-const BOLTZ_API = 'https://api.ark.boltz.exchange'
-const NETWORK = 'bitcoin' // mainnet
+const BOLTZ_API = 'https://boltz.exchange/api'
+const NETWORK = 'BTC' // mainnet - Boltz uses 'BTC' not 'bitcoin'
 
 /**
  * Initialize ArkadeLightning instance with wallet
