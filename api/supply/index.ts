@@ -5,17 +5,15 @@
  * This ensures consistent counts across all clients and avoids
  * race conditions from concurrent Nostr relay queries.
  *
- * Cache is stored in Vercel Blob and refreshed every 30 seconds.
+ * Cache is stored in-memory (serverless function stays warm for ~5 mins)
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { put, list } from '@vercel/blob'
 import { SimplePool } from 'nostr-tools'
 
 const OFFICIAL_RELAY = 'wss://relay.damus.io'
 const KIND_PUNK_MINT = 1400
 const CACHE_DURATION_MS = 30000 // 30 seconds
-const BLOB_FILENAME = 'supply-cache.json'
 
 interface SupplyCache {
   totalMinted: number
@@ -24,38 +22,8 @@ interface SupplyCache {
   updatedBy?: string // User agent that triggered the update
 }
 
-/**
- * Read supply cache from Vercel Blob
- */
-async function readSupplyCache(): Promise<SupplyCache | null> {
-  try {
-    const { blobs } = await list()
-    const cacheBlob = blobs.find(b => b.pathname === BLOB_FILENAME)
-
-    if (!cacheBlob) {
-      return null
-    }
-
-    const response = await fetch(cacheBlob.url)
-    const cache: SupplyCache = await response.json()
-    return cache
-  } catch (error) {
-    console.warn('Failed to read supply cache:', error)
-    return null
-  }
-}
-
-/**
- * Write supply cache to Vercel Blob
- */
-async function writeSupplyCache(cache: SupplyCache): Promise<void> {
-  await put(BLOB_FILENAME, JSON.stringify(cache, null, 2), {
-    access: 'public',
-    contentType: 'application/json',
-    addRandomSuffix: false,
-    allowOverwrite: true
-  })
-}
+// In-memory cache (persists while function is warm)
+let memoryCache: SupplyCache | null = null
 
 /**
  * Fetch fresh supply from Nostr relay
@@ -119,18 +87,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   console.log(`   IP: ${req.headers['x-forwarded-for'] || req.socket.remoteAddress}`)
 
   try {
-    // Read cache
-    const cache = await readSupplyCache()
     const now = Date.now()
 
     // Check if cache is fresh
-    if (cache && (now - cache.lastUpdated) < CACHE_DURATION_MS) {
-      const age = Math.floor((now - cache.lastUpdated) / 1000)
+    if (memoryCache && (now - memoryCache.lastUpdated) < CACHE_DURATION_MS) {
+      const age = Math.floor((now - memoryCache.lastUpdated) / 1000)
       console.log(`✅ Serving cached supply (age: ${age}s)`)
 
       return res.status(200).json({
-        totalMinted: cache.totalMinted,
-        maxPunks: cache.maxPunks,
+        totalMinted: memoryCache.totalMinted,
+        maxPunks: memoryCache.maxPunks,
         cached: true,
         cacheAge: age
       })
@@ -141,8 +107,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const freshSupply = await fetchSupplyFromRelay(req.headers['user-agent'])
 
-    // Update cache
-    await writeSupplyCache(freshSupply)
+    // Update in-memory cache
+    memoryCache = freshSupply
 
     console.log(`✅ Cache updated: ${freshSupply.totalMinted} punks`)
 

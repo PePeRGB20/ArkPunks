@@ -6,7 +6,7 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { list } from '@vercel/blob'
+import { list, head } from '@vercel/blob'
 
 interface WhitelistEntry {
   punkId: string
@@ -21,20 +21,54 @@ interface WhitelistStore {
 
 const BLOB_FILENAME = 'auto-whitelist.json'
 
+// In-memory cache
+let whitelistCache: WhitelistStore | null = null
+let lastFetchAttempt: number = 0
+const FETCH_RETRY_DELAY = 5000 // 5 seconds between fetch attempts
+
 /**
  * Read whitelist from Vercel Blob
  */
 async function readWhitelist(): Promise<WhitelistStore> {
+  // Return cached value if available
+  if (whitelistCache) {
+    return whitelistCache
+  }
+
+  // Rate limit fetch attempts
+  const now = Date.now()
+  if (now - lastFetchAttempt < FETCH_RETRY_DELAY) {
+    console.log('⏭️  Skipping fetch (too soon since last attempt)')
+    return { entries: [], lastUpdated: Date.now() }
+  }
+
+  lastFetchAttempt = now
+
   try {
     const { blobs } = await list()
     const whitelistBlob = blobs.find(b => b.pathname === BLOB_FILENAME)
 
     if (!whitelistBlob) {
+      console.log('📝 No whitelist blob found')
       return { entries: [], lastUpdated: Date.now() }
     }
 
-    const response = await fetch(whitelistBlob.url)
-    const store: WhitelistStore = await response.json()
+    // Try using downloadUrl property if available
+    const url = (whitelistBlob as any).downloadUrl || whitelistBlob.url
+
+    console.log(`📥 Fetching whitelist from: ${url.substring(0, 50)}...`)
+    const response = await fetch(url)
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+    }
+
+    const text = await response.text()
+    const store: WhitelistStore = JSON.parse(text)
+
+    // Cache successfully fetched whitelist
+    whitelistCache = store
+
     return store
   } catch (error) {
     console.warn('Failed to read whitelist, returning empty:', error)
