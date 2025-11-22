@@ -64,84 +64,28 @@ export async function getNostrSupply(): Promise<{
   // Start a new fetch
   supplyFetchPromise = (async () => {
     try {
-      console.log('📡 Fetching punk supply from official relay only...')
-      console.log(`   Using: ${OFFICIAL_RELAY}`)
+      console.log('📡 Fetching punk supply from server-side cache API...')
 
-      // Determine current network (default to mainnet if not set)
-      const currentNetwork = import.meta.env.VITE_ARKADE_NETWORK || 'mainnet'
-      console.log(`   Filtering for network: ${currentNetwork}`)
-      console.log(`   VITE_ARKADE_NETWORK env var: "${import.meta.env.VITE_ARKADE_NETWORK}"`)
+      // Call server-side API that manages cache and queries Nostr
+      const response = await fetch('/api/supply')
 
-      // Fetch all punk mint events (kind 1400) from official relay only
-      // Using single relay ensures consistent supply counts (no relay sync issues)
-      const allEvents = await pool.querySync([OFFICIAL_RELAY], {
-        kinds: [KIND_PUNK_MINT],
-        '#t': ['arkade-punk'],
-        limit: PUNK_SUPPLY_CONFIG.MAX_TOTAL_PUNKS + 100 // Fetch a bit more to be safe
-      })
-
-      // Filter by network AND server signature (only official punks)
-      const events = allEvents.filter(e => {
-        const networkTag = e.tags.find(t => t[0] === 'network')
-        const serverSigTag = e.tags.find(t => t[0] === 'server_sig')
-
-        // Must have correct network AND server signature to be counted
-        return networkTag?.[1] === currentNetwork && serverSigTag
-      })
-
-      console.log(`   Found ${events.length} official punk mint events on Nostr (filtered from ${allEvents.length} total)`)
-
-      // Debug: Log first few events to see their network tags
-      if (events.length > 0) {
-        console.log(`   📋 Sample events (first 3):`)
-        events.slice(0, 3).forEach((e, i) => {
-          const networkTag = e.tags.find(t => t[0] === 'network')
-          const punkIdTag = e.tags.find(t => t[0] === 'punk_id')
-          console.log(`      ${i + 1}. Punk ${punkIdTag?.[1]} - network: "${networkTag?.[1]}"`)
-        })
+      if (!response.ok) {
+        throw new Error(`Supply API failed: ${response.statusText}`)
       }
 
-      // Deduplicate by punkId (keep earliest)
-      const punkMap = new Map<string, NostrEvent>()
+      const data = await response.json()
 
-      for (const event of events) {
-        const punkIdTag = event.tags.find(t => t[0] === 'punk_id')
-        if (!punkIdTag) continue
-
-        const punkId = punkIdTag[1]
-        const existing = punkMap.get(punkId)
-
-        // Keep the earliest event (lowest created_at)
-        if (!existing || event.created_at < existing.created_at) {
-          punkMap.set(punkId, event)
-        }
-      }
-
-      const punks = Array.from(punkMap.values())
-        .sort((a, b) => a.created_at - b.created_at) // Sort by mint time
-        .slice(0, PUNK_SUPPLY_CONFIG.MAX_TOTAL_PUNKS) // Cap at max supply
-        .map(event => {
-          const punkIdTag = event.tags.find(t => t[0] === 'punk_id')
-          const ownerTag = event.tags.find(t => t[0] === 'owner')
-
-          return {
-            punkId: punkIdTag?.[1] || '',
-            owner: ownerTag?.[1] || event.pubkey,
-            mintedAt: event.created_at
-          }
-        })
-
-      console.log(`✅ Loaded ${punks.length} unique punks from Nostr`)
+      console.log(`✅ Loaded ${data.totalMinted} punks from ${data.cached ? 'cache' : 'fresh query'} (age: ${data.cacheAge}s)`)
 
       return {
-        totalMinted: punks.length,
-        maxPunks: PUNK_SUPPLY_CONFIG.MAX_TOTAL_PUNKS,
-        punks
+        totalMinted: data.totalMinted,
+        maxPunks: data.maxPunks,
+        punks: [] // API only returns count, not full list
       }
     } catch (error) {
-      console.error('❌ Failed to fetch supply from Nostr:', error)
+      console.error('❌ Failed to fetch supply from API:', error)
 
-      // Fallback to localStorage if Nostr fails
+      // Fallback to localStorage if API fails
       return {
         totalMinted: 0,
         maxPunks: PUNK_SUPPLY_CONFIG.MAX_TOTAL_PUNKS,
