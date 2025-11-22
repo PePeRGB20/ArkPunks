@@ -145,11 +145,6 @@
         </div>
 
         <div class="detail-row">
-          <span class="label">VTXOs:</span>
-          <span class="value">{{ vtxoCount }}</span>
-        </div>
-
-        <div class="detail-row">
           <span class="label">Status:</span>
           <span class="value">
             <span v-if="canMintPunks" class="status-ready">Ready to mint 🎨</span>
