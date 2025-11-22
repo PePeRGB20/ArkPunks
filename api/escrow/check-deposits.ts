@@ -35,11 +35,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.log('   VTXO structure sample:', JSON.stringify(vtxos[0], null, 2))
     }
 
-    // Calculate total sats - handle different possible structures
-    const totalSats = vtxos.reduce((sum, v) => {
-      const amount = v.vtxo?.amount || v.amount || 0
-      return sum + Number(amount)
-    }, 0)
+    // Calculate total sats - SDK returns "value" field directly
+    const totalSats = vtxos.reduce((sum, v) => sum + Number(v.value || 0), 0)
     console.log(`   Total: ${totalSats} sats`)
 
     // Get all listings to match VTXOs to sellers
@@ -65,18 +62,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const vtxo = vtxos[i]
 
       try {
-        // Handle different possible VTXO structures
-        const vtxoData = vtxo.vtxo || vtxo
-
-        // Safety check
-        if (!vtxoData || !vtxoData.outpoint) {
-          console.error(`   ❌ VTXO ${i}: Missing outpoint data`)
+        // SDK returns flat structure: { txid, vout, value }
+        if (!vtxo.txid || vtxo.vout === undefined) {
+          console.error(`   ❌ VTXO ${i}: Missing txid or vout`)
           console.error(`      VTXO structure:`, JSON.stringify(vtxo, null, 2))
           continue
         }
 
-        const outpoint = `${vtxoData.outpoint.txid}:${vtxoData.outpoint.vout}`
-        const amount = vtxoData.amount || 0
+        const outpoint = `${vtxo.txid}:${vtxo.vout}`
+        const amount = vtxo.value || 0
 
         const listing = vtxoToListing.get(outpoint)
 
