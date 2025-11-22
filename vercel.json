@@ -13,6 +13,10 @@
     }
   ],
   "functions": {
+    "api/escrow/recover.ts": {
+      "memory": 1024,
+      "maxDuration": 60
+    },
     "api/escrow/**/*.ts": {
       "memory": 1024,
       "maxDuration": 10
