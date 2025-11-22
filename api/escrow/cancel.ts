@@ -20,6 +20,7 @@ interface CancelRequest {
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   console.log('🔴 Escrow cancel endpoint called')
   console.log('   Method:', req.method)
+  console.log('   Body:', req.body)
 
   // Only allow POST
   if (req.method !== 'POST') {
