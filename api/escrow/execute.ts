@@ -15,6 +15,7 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { getEscrowListing, updateEscrowStatus, ESCROW_PRIVATE_KEY } from './_lib/escrowStore.js'
+import { getEscrowWallet } from './_lib/escrowArkadeWallet.js'
 
 interface ExecuteRequest {
   punkId: string
@@ -107,27 +108,42 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.log(`   Fee (${FEE_PERCENT}%): ${fee} sats`)
     console.log(`   Seller receives: ${sellerAmount} sats`)
 
-    // TODO: Execute atomic swap using Arkade SDK
-    // For now, we'll return a mock response indicating what would happen
-    //
-    // Real implementation would:
-    // 1. Initialize escrow wallet from ESCROW_PRIVATE_KEY
-    // 2. Get escrow wallet's VTXOs
-    // 3. Transfer punk VTXO to buyer address
-    // 4. Transfer payment (minus fee) to seller address
-    //
-    // const escrowWallet = await createWallet(ESCROW_PRIVATE_KEY)
-    // const punkTxid = await escrowWallet.send(listing.buyerAddress, punkVtxo)
-    // const paymentTxid = await escrowWallet.send(listing.sellerArkAddress, sellerAmount)
+    // Execute atomic swap using Arkade SDK
+    console.log('⚡ Executing atomic swap with Arkade SDK...')
 
-    console.log('⚠️  TODO: Implement actual swap execution')
-    console.log('   This would:')
-    console.log(`   1. Send punk VTXO (${listing.punkVtxoOutpoint}) to ${listing.buyerAddress}`)
-    console.log(`   2. Send ${sellerAmount} sats to ${listing.sellerArkAddress}`)
+    // Initialize escrow wallet
+    const escrowWallet = await getEscrowWallet()
+    console.log('✅ Escrow wallet initialized')
+    console.log('   Escrow address:', escrowWallet.arkadeAddress)
 
-    // For now, mark as sold with mock transaction IDs
-    const punkTxid = 'mock-punk-transfer-' + Date.now()
-    const paymentTxid = 'mock-payment-transfer-' + Date.now()
+    // Check escrow balance
+    const escrowBalance = await escrowWallet.getBalance()
+    console.log('   Escrow balance:', escrowBalance.available.toString(), 'sats')
+
+    // Verify escrow has enough funds to complete the swap
+    // Need: punk amount (for buyer) + seller payment
+    // For MVP: We're using regular sats transfers, not special punk VTXOs
+    const totalNeeded = price + sellerAmount
+    if (escrowBalance.available < totalNeeded) {
+      throw new Error(
+        `Insufficient escrow balance. Need ${totalNeeded} sats, have ${escrowBalance.available} sats. ` +
+        `Both seller (punk deposit) and buyer (payment) must send funds to escrow before execution.`
+      )
+    }
+
+    // Transfer 1: Send payment to seller (minus fee)
+    console.log(`💸 Transferring ${sellerAmount} sats to seller: ${listing.sellerArkAddress}`)
+    const paymentTxid = await escrowWallet.send(listing.sellerArkAddress, sellerAmount)
+    console.log(`✅ Payment sent! Txid: ${paymentTxid}`)
+
+    // Transfer 2: Send punk value to buyer
+    // Note: For MVP, we're transferring the punk's value in sats
+    // In the future, this would transfer the actual punk VTXO with tapscripts
+    console.log(`💸 Transferring punk (${price} sats) to buyer: ${listing.buyerAddress}`)
+    const punkTxid = await escrowWallet.send(listing.buyerAddress, price)
+    console.log(`✅ Punk transferred! Txid: ${punkTxid}`)
+
+    console.log('✅ Atomic swap completed successfully!')
 
     // Update listing status
     await updateEscrowStatus(punkId, 'sold', {

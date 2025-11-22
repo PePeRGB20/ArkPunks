@@ -1,0 +1,122 @@
+/**
+ * Server-side Escrow Wallet using Arkade SDK
+ *
+ * This wallet is initialized with ESCROW_PRIVATE_KEY and handles:
+ * - Receiving punk VTXOs and payments from sellers/buyers
+ * - Executing atomic swaps (transferring punk to buyer, payment to seller)
+ */
+
+import { ESCROW_PRIVATE_KEY } from './escrowStore.js'
+import { hex } from '@scure/base'
+
+export interface EscrowWalletInterface {
+  address: string
+  arkadeAddress: string
+  send: (recipient: string, amount: bigint) => Promise<string>
+  getBalance: () => Promise<{ available: bigint; total: bigint }>
+}
+
+let cachedWallet: EscrowWalletInterface | null = null
+
+/**
+ * Initialize escrow wallet from private key
+ */
+export async function getEscrowWallet(): Promise<EscrowWalletInterface> {
+  // Return cached wallet if available
+  if (cachedWallet) {
+    return cachedWallet
+  }
+
+  if (!ESCROW_PRIVATE_KEY) {
+    throw new Error('ESCROW_PRIVATE_KEY not configured')
+  }
+
+  console.log('🔧 Initializing escrow wallet...')
+
+  try {
+    // Import Arkade SDK
+    const sdk = await import('@arkade-os/sdk')
+    const { Wallet, SingleKey } = sdk
+
+    // Parse private key (hex string to Uint8Array)
+    const privateKeyBytes = hex.decode(ESCROW_PRIVATE_KEY)
+
+    // Create identity from private key
+    const identity = SingleKey.fromBytes(privateKeyBytes)
+
+    // Determine network config
+    const isMainnet = process.env.ARKADE_NETWORK === 'mainnet'
+    const arkServerUrl = isMainnet
+      ? 'https://ark.secondlabs.app'
+      : 'https://testnet-ark.vulpemventures.com'
+    const esploraUrl = isMainnet
+      ? 'https://blockstream.info/api'
+      : 'https://blockstream.info/testnet/api'
+
+    console.log('   Network:', isMainnet ? 'mainnet' : 'testnet')
+    console.log('   Ark Server:', arkServerUrl)
+
+    // Create wallet instance
+    const wallet = await Wallet.create({
+      identity,
+      esploraUrl,
+      arkServerUrl
+    })
+
+    const walletAny = wallet as any
+
+    // Get Arkade addresses
+    const arkadeAddress = await walletAny.getAddress()
+    console.log('✅ Escrow wallet initialized')
+    console.log('   Arkade address:', arkadeAddress)
+
+    // Cache the wallet interface
+    cachedWallet = {
+      address: arkadeAddress,
+      arkadeAddress,
+
+      send: async (recipient: string, amount: bigint) => {
+        console.log(`💸 Escrow sending ${amount} sats to ${recipient}`)
+
+        const result = await walletAny.sendBitcoin({
+          address: recipient,
+          amount: Number(amount)
+        })
+
+        console.log('✅ Transfer complete, txid:', result)
+        return result
+      },
+
+      getBalance: async () => {
+        const balance = await wallet.getBalance()
+
+        const toBigInt = (value: any): bigint => {
+          if (value === null || value === undefined) return 0n
+          if (typeof value === 'bigint') return value
+          if (typeof value === 'number') return BigInt(value)
+          if (typeof value === 'string') return BigInt(value)
+          if (typeof value === 'object' && 'total' in value) return toBigInt(value.total)
+          return 0n
+        }
+
+        return {
+          available: toBigInt(balance.available),
+          total: toBigInt(balance.total)
+        }
+      }
+    }
+
+    return cachedWallet
+
+  } catch (error) {
+    console.error('❌ Failed to initialize escrow wallet:', error)
+    throw new Error(`Escrow wallet initialization failed: ${error}`)
+  }
+}
+
+/**
+ * Clear wallet cache (for testing)
+ */
+export function clearWalletCache() {
+  cachedWallet = null
+}
