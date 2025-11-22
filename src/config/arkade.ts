@@ -64,6 +64,12 @@ export const SERVER_SIGNING_CONFIG = {
   // These are considered official even without server signature
   LEGACY_WHITELIST: [
     '4315737c9950cdc2797ab2caf6f3d208916d9a7b4f324550dde544fbbab0daaf',
+    // Punks minted when Nostr publishing failed (network/server error)
+    '9b986360f5bde2dd19a6e942a89bbbba541b31aece184688b846b233f751a881',
+    'a02ee0929e3dd49e47e1ad0bcda6d8cd17d77ba50c6775fcb9c2be96e17e95f8',
+    'd8f58e6e27def94a75be78a8b659e1b6823eb1906a1a9b6d8cf4d5f9e17e6906',
+    'f7f37f5b15f0aea1ad44f24f03aa14e0f5cdd9b3088b37b5cc3c62c9b21e2ed3',
+    'be947d905bf93af4f1dded85f7f0d2dca5b0e1d18ba1acb2f0e4e9e15cf7b3b1',
   ] as string[]
 }
 
