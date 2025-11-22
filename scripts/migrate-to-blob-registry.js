@@ -64,60 +64,36 @@ try {
   // Use production URL (change this if running locally)
   const API_URL = process.env.API_URL || 'https://arkpunks.com'
 
-  console.log(`📤 Submitting punks to blob registry at ${API_URL}...`)
+  console.log(`📤 Submitting ${uniquePunks.length} punks to blob registry at ${API_URL}...`)
+  console.log('   Using batch endpoint to avoid race conditions')
   console.log('')
 
-  let successCount = 0
-  let errorCount = 0
-  const errors = []
-
-  for (const punk of uniquePunks) {
-    try {
-      const response = await fetch(`${API_URL}/api/registry/track`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          punkId: punk.punkId,
-          pubkey: punk.minterPubkey,
-          vtxo: punk.vtxo
-        })
+  try {
+    // Send all punks in a single batch request (avoids race conditions)
+    const response = await fetch(`${API_URL}/api/registry/batch-track`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        punks: uniquePunks
       })
+    })
 
-      if (response.ok) {
-        const data = await response.json()
-        if (!data.alreadyRegistered) {
-          successCount++
-          if (successCount % 50 === 0) {
-            console.log(`   ✅ Registered ${successCount} punks...`)
-          }
-        }
-      } else {
-        errorCount++
-        const errorText = await response.text()
-        errors.push({ punkId: punk.punkId.slice(0, 16), status: response.status, error: errorText })
-        if (errorCount <= 3) {
-          console.warn(`   ⚠️  Failed to register ${punk.punkId.slice(0, 16)}...`)
-          console.warn(`      HTTP ${response.status}: ${errorText.substring(0, 200)}`)
-        }
-      }
-    } catch (error) {
-      errorCount++
-      errors.push({ punkId: punk.punkId.slice(0, 16), error: error.message })
-      if (errorCount <= 5) {
-        console.error(`   ❌ Error registering punk:`, error.message)
-      }
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`HTTP ${response.status}: ${errorText}`)
     }
-  }
 
-  if (errorCount > 5) {
-    console.log(`   ... and ${errorCount - 5} more errors`)
-  }
+    const data = await response.json()
 
-  console.log('')
-  console.log('✅ Migration complete!')
-  console.log(`   Successfully registered: ${successCount} punks`)
-  console.log(`   Errors: ${errorCount}`)
-  console.log(`   Total in Nostr: ${uniquePunks.length}`)
+    console.log('✅ Migration complete!')
+    console.log(`   Added: ${data.added} new punks`)
+    console.log(`   Skipped: ${data.skipped} duplicates`)
+    console.log(`   Total registered: ${data.totalRegistered}`)
+    console.log(`   Total in Nostr: ${uniquePunks.length}`)
+
+  } catch (error) {
+    console.error('❌ Batch registration failed:', error.message)
+  }
 
 } catch (error) {
   console.error('❌ Migration failed:', error)
