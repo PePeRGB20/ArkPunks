@@ -385,7 +385,7 @@ async function buyPunk(punk: MarketplaceListing) {
 
     console.log(`✅ Payment sent! TXID: ${txid}`)
 
-    // Now execute the swap
+    // Now execute the swap with retry logic
     console.log('⚡ Executing atomic swap...')
 
     const executeConfirm = confirm(
@@ -395,6 +395,7 @@ async function buyPunk(punk: MarketplaceListing) {
       `1. Verify both deposits (seller's punk + your payment)\n` +
       `2. Transfer the punk to you\n` +
       `3. Pay the seller (minus 1% fee)\n\n` +
+      `This may take a few seconds...\n\n` +
       `Ready to execute?`
     )
 
@@ -407,40 +408,89 @@ async function buyPunk(punk: MarketplaceListing) {
       return
     }
 
-    // Execute the swap
+    // Execute the swap with retry logic
     executing.value = true
+    const MAX_RETRIES = 5
+    const RETRY_DELAY = 2000 // 2 seconds
+
     try {
-      console.log('🔄 Calling execute endpoint...')
-      const executeResponse = await executeEscrowSwap({
-        punkId: punk.punkId,
-        buyerPubkey
-      })
+      let lastError: any = null
 
-      console.log('✅ Swap executed:', executeResponse)
+      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          console.log(`🔄 Calling execute endpoint (attempt ${attempt}/${MAX_RETRIES})...`)
 
-      alert(
-        `🎉 Purchase complete!\n\n` +
-        `${punk.metadata.name} is now yours!\n\n` +
-        `Punk Transfer: ${executeResponse.punkTxid.slice(0, 16)}...\n` +
-        `Payment Transfer: ${executeResponse.paymentTxid.slice(0, 16)}...\n\n` +
-        `Refresh the page to see your new punk!`
-      )
+          const executeResponse = await executeEscrowSwap({
+            punkId: punk.punkId,
+            buyerPubkey
+          })
 
-      // Reload listings and gallery
-      await loadListings()
-      if (reloadPunks) {
-        await reloadPunks()
+          console.log('✅ Swap executed:', executeResponse)
+
+          alert(
+            `🎉 Purchase complete!\n\n` +
+            `${punk.metadata.name} is now yours!\n\n` +
+            `Punk Transfer: ${executeResponse.punkTxid.slice(0, 16)}...\n` +
+            `Payment Transfer: ${executeResponse.paymentTxid.slice(0, 16)}...\n\n` +
+            `Refresh the page to see your new punk!`
+          )
+
+          // Reload listings and gallery
+          await loadListings()
+          if (reloadPunks) {
+            await reloadPunks()
+          }
+
+          return // Success - exit the function
+
+        } catch (executeError: any) {
+          lastError = executeError
+          console.warn(`⚠️ Attempt ${attempt}/${MAX_RETRIES} failed:`, executeError.message)
+
+          // If this is the last attempt, throw the error
+          if (attempt === MAX_RETRIES) {
+            throw executeError
+          }
+
+          // Wait before retrying
+          console.log(`⏳ Waiting ${RETRY_DELAY/1000}s before retry...`)
+          await new Promise(resolve => setTimeout(resolve, RETRY_DELAY))
+        }
       }
 
     } catch (executeError: any) {
-      console.error('❌ Failed to execute swap:', executeError)
+      console.error('❌ Failed to execute swap after retries:', executeError)
+
+      // Check if it's a "deposits not complete" error
+      const isDepositError = executeError?.message?.includes('Deposits not complete')
+
+      const retry = confirm(
+        `⚠️ Swap execution failed:\n\n` +
+        `${executeError?.message || executeError}\n\n` +
+        `${isDepositError ?
+          'Your payment may still be processing on Arkade.\n' +
+          'Typically takes 1-5 seconds.\n\n' :
+          'There may be an issue with the escrow.\n\n'
+        }` +
+        `Your payment (${formatSats(total)} sats) is safe in escrow.\n\n` +
+        `Would you like to try again?`
+      )
+
+      if (retry) {
+        // Recursive call - try the whole process again
+        executing.value = false
+        buying.value = false
+        await buyPunk(punk)
+        return
+      }
 
       alert(
-        `⚠️ Payment sent but swap execution failed:\n\n` +
-        `${executeError?.message || executeError}\n\n` +
-        `Don't worry - your payment is in escrow.\n` +
-        `The seller may need to deposit the punk first.\n\n` +
-        `Try again in a few seconds from the marketplace.`
+        `Don't worry - your funds are safe!\n\n` +
+        `Your payment is held in escrow.\n` +
+        `You can try executing the swap again from the marketplace.\n\n` +
+        `If the problem persists, contact support with:\n` +
+        `Punk ID: ${punk.punkId.slice(0, 16)}...\n` +
+        `Payment TXID: ${txid.slice(0, 16)}...`
       )
 
       await loadListings()
