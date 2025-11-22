@@ -79,10 +79,10 @@
             <button
               v-if="punk.saleMode === 'escrow'"
               @click="buyPunk(punk)"
-              :disabled="buying"
+              :disabled="buying || executing"
               class="btn btn-buy"
             >
-              {{ buying ? '⏳ Processing...' : '💰 Buy Now' }}
+              {{ buying ? '⏳ Buying...' : executing ? '⚡ Executing...' : '💰 Buy Now' }}
             </button>
             <div v-else class="buy-disabled-label">
               <span>💱 P2P mode</span>
@@ -136,7 +136,7 @@ import { ref, onMounted, inject, computed } from 'vue'
 import type { ArkadeWalletInterface } from '@/utils/arkadeWallet'
 import { getMarketplaceListings, publishPunkSold } from '@/utils/marketplaceUtils'
 import { getOfficialPunksList } from '@/utils/officialPunkValidator'
-import { buyPunkFromEscrow } from '@/utils/escrowApi'
+import { buyPunkFromEscrow, executeEscrowSwap } from '@/utils/escrowApi'
 import { getPublicKey } from 'nostr-tools'
 import { hex } from '@scure/base'
 
@@ -159,6 +159,7 @@ interface MarketplaceListing {
 const listedPunks = ref<MarketplaceListing[]>([])
 const loading = ref(true)
 const buying = ref(false)
+const executing = ref(false)
 
 // Pagination
 const currentPage = ref(1)
@@ -384,23 +385,118 @@ async function buyPunk(punk: MarketplaceListing) {
 
     console.log(`✅ Payment sent! TXID: ${txid}`)
 
-    alert(
-      `✅ Payment sent to escrow!\n\n` +
-      `The server will now:\n` +
-      `1. Verify your payment\n` +
+    // Now execute the swap with retry logic
+    console.log('⚡ Executing atomic swap...')
+
+    const executeConfirm = confirm(
+      `✅ Payment sent!\n\n` +
+      `Now we'll execute the atomic swap.\n\n` +
+      `The server will:\n` +
+      `1. Verify both deposits (seller's punk + your payment)\n` +
       `2. Transfer the punk to you\n` +
-      `3. Pay the seller\n\n` +
-      `This happens automatically within seconds.\n\n` +
-      `Refresh the page in a moment to see your new punk!`
+      `3. Pay the seller (minus 1% fee)\n\n` +
+      `This may take a few seconds...\n\n` +
+      `Ready to execute?`
     )
 
-    // Reload listings and gallery after a delay to allow server to process
-    setTimeout(async () => {
+    if (!executeConfirm) {
+      alert(
+        `Payment was sent but swap not executed.\n\n` +
+        `You can execute it later from the marketplace page.`
+      )
       await loadListings()
-      if (reloadPunks) {
-        await reloadPunks()
+      return
+    }
+
+    // Execute the swap with retry logic
+    executing.value = true
+    const MAX_RETRIES = 5
+    const RETRY_DELAY = 2000 // 2 seconds
+
+    try {
+      let lastError: any = null
+
+      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          console.log(`🔄 Calling execute endpoint (attempt ${attempt}/${MAX_RETRIES})...`)
+
+          const executeResponse = await executeEscrowSwap({
+            punkId: punk.punkId,
+            buyerPubkey
+          })
+
+          console.log('✅ Swap executed:', executeResponse)
+
+          alert(
+            `🎉 Purchase complete!\n\n` +
+            `${punk.metadata.name} is now yours!\n\n` +
+            `Punk Transfer: ${executeResponse.punkTxid.slice(0, 16)}...\n` +
+            `Payment Transfer: ${executeResponse.paymentTxid.slice(0, 16)}...\n\n` +
+            `Refresh the page to see your new punk!`
+          )
+
+          // Reload listings and gallery
+          await loadListings()
+          if (reloadPunks) {
+            await reloadPunks()
+          }
+
+          return // Success - exit the function
+
+        } catch (executeError: any) {
+          lastError = executeError
+          console.warn(`⚠️ Attempt ${attempt}/${MAX_RETRIES} failed:`, executeError.message)
+
+          // If this is the last attempt, throw the error
+          if (attempt === MAX_RETRIES) {
+            throw executeError
+          }
+
+          // Wait before retrying
+          console.log(`⏳ Waiting ${RETRY_DELAY/1000}s before retry...`)
+          await new Promise(resolve => setTimeout(resolve, RETRY_DELAY))
+        }
       }
-    }, 3000)
+
+    } catch (executeError: any) {
+      console.error('❌ Failed to execute swap after retries:', executeError)
+
+      // Check if it's a "deposits not complete" error
+      const isDepositError = executeError?.message?.includes('Deposits not complete')
+
+      const retry = confirm(
+        `⚠️ Swap execution failed:\n\n` +
+        `${executeError?.message || executeError}\n\n` +
+        `${isDepositError ?
+          'Your payment may still be processing on Arkade.\n' +
+          'Typically takes 1-5 seconds.\n\n' :
+          'There may be an issue with the escrow.\n\n'
+        }` +
+        `Your payment (${formatSats(total)} sats) is safe in escrow.\n\n` +
+        `Would you like to try again?`
+      )
+
+      if (retry) {
+        // Recursive call - try the whole process again
+        executing.value = false
+        buying.value = false
+        await buyPunk(punk)
+        return
+      }
+
+      alert(
+        `Don't worry - your funds are safe!\n\n` +
+        `Your payment is held in escrow.\n` +
+        `You can try executing the swap again from the marketplace.\n\n` +
+        `If the problem persists, contact support with:\n` +
+        `Punk ID: ${punk.punkId.slice(0, 16)}...\n` +
+        `Payment TXID: ${txid.slice(0, 16)}...`
+      )
+
+      await loadListings()
+    } finally {
+      executing.value = false
+    }
 
   } catch (error: any) {
     console.error('❌ Failed to buy punk:', error)
