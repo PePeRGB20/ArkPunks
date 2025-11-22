@@ -9,6 +9,7 @@ import { PUNK_SUPPLY_CONFIG } from '@/config/arkade'
 import { getNostrSupply } from './nostrRegistry'
 
 const GLOBAL_REGISTRY_KEY = 'arkade_punks_global_registry'
+const REGISTRY_VERSION = 'v2' // Increment this to invalidate old localStorage data
 
 // Cache for Nostr supply (refreshed periodically)
 let nostrSupplyCache: {
@@ -20,6 +21,7 @@ let nostrSupplyCache: {
 const CACHE_DURATION = 30000 // 30 seconds
 
 export interface GlobalPunkRegistry {
+  version?: string
   totalMinted: number
   punks: {
     punkId: string
@@ -33,18 +35,26 @@ export interface GlobalPunkRegistry {
  */
 function getGlobalRegistry(): GlobalPunkRegistry {
   if (typeof window === 'undefined') {
-    return { totalMinted: 0, punks: [] }
+    return { version: REGISTRY_VERSION, totalMinted: 0, punks: [] }
   }
 
   const data = localStorage.getItem(GLOBAL_REGISTRY_KEY)
   if (!data) {
-    return { totalMinted: 0, punks: [] }
+    return { version: REGISTRY_VERSION, totalMinted: 0, punks: [] }
   }
 
   try {
-    return JSON.parse(data)
+    const registry = JSON.parse(data)
+
+    // Invalidate cache if version mismatch
+    if (registry.version !== REGISTRY_VERSION) {
+      console.log(`🔄 Registry version mismatch (${registry.version} → ${REGISTRY_VERSION}), clearing cache`)
+      return { version: REGISTRY_VERSION, totalMinted: 0, punks: [] }
+    }
+
+    return registry
   } catch {
-    return { totalMinted: 0, punks: [] }
+    return { version: REGISTRY_VERSION, totalMinted: 0, punks: [] }
   }
 }
 
@@ -54,6 +64,8 @@ function getGlobalRegistry(): GlobalPunkRegistry {
 function saveGlobalRegistry(registry: GlobalPunkRegistry): void {
   if (typeof window === 'undefined') return
 
+  // Ensure version is set
+  registry.version = REGISTRY_VERSION
   localStorage.setItem(GLOBAL_REGISTRY_KEY, JSON.stringify(registry))
 }
 
