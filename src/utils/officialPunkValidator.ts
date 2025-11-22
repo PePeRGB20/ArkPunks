@@ -230,8 +230,19 @@ export async function getOfficialPunksList(): Promise<{
 
     console.log(`✅ Loaded ${punkIds.length} official punks from authority relay`)
 
+    // Also include auto-whitelisted punks (punks without Nostr events)
+    const autoWhitelist = await getAutoWhitelist()
+    const autoWhitelistedPunks = Array.from(autoWhitelist)
+
+    // Merge auto-whitelisted punks with relay punks (deduplicate)
+    const allOfficialPunkIds = [...new Set([...punkIds, ...autoWhitelistedPunks])]
+
+    if (autoWhitelistedPunks.length > 0) {
+      console.log(`✅ Merged ${autoWhitelistedPunks.length} auto-whitelisted punk(s) (total: ${allOfficialPunkIds.length})`)
+    }
+
     // Debug: Warn if we got zero official punks
-    if (punkIds.length === 0) {
+    if (allOfficialPunkIds.length === 0) {
       console.warn('⚠️  WARNING: Zero official punks loaded! This will cause all official tags to disappear.')
       console.warn('⚠️  Check:')
       console.warn('⚠️    1. Are there punk events on the relay?')
@@ -242,12 +253,12 @@ export async function getOfficialPunksList(): Promise<{
 
     // Update cache
     officialPunksCache = {
-      punkIds: new Set(punkIds),
+      punkIds: new Set(allOfficialPunkIds),
       events: finalEvents,
       lastFetch: now
     }
 
-    return { punkIds, events: finalEvents }
+    return { punkIds: allOfficialPunkIds, events: finalEvents }
 
   } catch (error) {
     console.error('❌ Failed to fetch official punks from relay:', error)
