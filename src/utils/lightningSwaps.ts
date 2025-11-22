@@ -7,7 +7,9 @@
  */
 
 import { BoltzSwapProvider, ArkadeLightning } from '@arkade-os/boltz-swap'
+import { RestArkProvider } from '@arkade-os/sdk'
 import type { ArkWallet } from '@arkade-os/sdk'
+import { getActiveConfig } from '@/config/arkade'
 
 const BOLTZ_API = 'https://api.ark.boltz.exchange'
 const NETWORK = 'bitcoin' // mainnet
@@ -16,14 +18,21 @@ const NETWORK = 'bitcoin' // mainnet
  * Initialize ArkadeLightning instance with wallet
  */
 function initArkadeLightning(wallet: ArkWallet): ArkadeLightning {
+  const config = getActiveConfig()
+
   const swapProvider = new BoltzSwapProvider({
     apiUrl: BOLTZ_API,
     network: NETWORK
   })
 
+  const arkProvider = new RestArkProvider({
+    url: config.arkServerUrl
+  })
+
   return new ArkadeLightning({
     wallet,
-    swapProvider
+    swapProvider,
+    arkProvider
   })
 }
 
