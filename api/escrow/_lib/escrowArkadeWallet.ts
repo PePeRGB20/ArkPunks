@@ -48,16 +48,16 @@ export async function getEscrowWallet(): Promise<EscrowWalletInterface> {
     if (process.env.ARKADE_NETWORK) {
       isMainnet = process.env.ARKADE_NETWORK === 'mainnet'
     } else {
-      // Detect from address: ark1 = testnet, arkm = mainnet
-      isMainnet = ESCROW_ADDRESS.startsWith('arkm')
+      // Detect from address: ark1 = mainnet, tark1 = testnet
+      isMainnet = ESCROW_ADDRESS.startsWith('ark1')
     }
 
     const arkServerUrl = isMainnet
-      ? 'https://ark.secondlabs.app'
-      : 'https://testnet-ark.vulpemventures.com'
+      ? 'https://arkade.computer'
+      : 'https://mutinynet.arkade.sh'
     const esploraUrl = isMainnet
-      ? 'https://blockstream.info/api'
-      : 'https://blockstream.info/testnet/api'
+      ? 'https://mempool.space/api'
+      : 'https://mutinynet.com/api'
 
     console.log('   Network:', isMainnet ? 'mainnet' : 'testnet', '(detected from', process.env.ARKADE_NETWORK ? 'env var' : 'address', ')')
     console.log('   Ark Server:', arkServerUrl)
