@@ -22,7 +22,8 @@ interface ListRequest {
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   console.log('🔵 Escrow list endpoint called')
   console.log('   Method:', req.method)
-  console.log('   Env check:', process.env.ESCROW_WALLET_ADDRESS ? 'SET' : 'NOT SET')
+  console.log('   Env ESCROW_WALLET_ADDRESS:', process.env.ESCROW_WALLET_ADDRESS ? 'SET' : 'NOT SET')
+  console.log('   Env ESCROW_WALLET_PRIVATE_KEY:', process.env.ESCROW_WALLET_PRIVATE_KEY ? 'SET' : 'NOT SET')
 
   // Only allow POST
   if (req.method !== 'POST') {

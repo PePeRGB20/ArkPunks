@@ -28,10 +28,12 @@ export async function getEscrowWallet(): Promise<EscrowWalletInterface> {
   }
 
   if (!ESCROW_PRIVATE_KEY) {
-    throw new Error('ESCROW_PRIVATE_KEY not configured')
+    throw new Error('ESCROW_WALLET_PRIVATE_KEY environment variable not configured')
   }
 
   console.log('🔧 Initializing escrow wallet...')
+  console.log('   Private key length:', ESCROW_PRIVATE_KEY.length)
+  console.log('   Expected address:', ESCROW_ADDRESS)
 
   try {
     // Import Arkade SDK
@@ -45,7 +47,15 @@ export async function getEscrowWallet(): Promise<EscrowWalletInterface> {
     const identity = SingleKey.fromBytes(privateKeyBytes)
 
     // Determine network config
-    const isMainnet = process.env.ARKADE_NETWORK === 'mainnet'
+    // Check env var first, then fallback to detecting from address
+    let isMainnet = false
+    if (process.env.ARKADE_NETWORK) {
+      isMainnet = process.env.ARKADE_NETWORK === 'mainnet'
+    } else {
+      // Detect from address: ark1 = testnet, arkm = mainnet
+      isMainnet = ESCROW_ADDRESS.startsWith('arkm')
+    }
+
     const arkServerUrl = isMainnet
       ? 'https://ark.secondlabs.app'
       : 'https://testnet-ark.vulpemventures.com'
@@ -53,8 +63,9 @@ export async function getEscrowWallet(): Promise<EscrowWalletInterface> {
       ? 'https://blockstream.info/api'
       : 'https://blockstream.info/testnet/api'
 
-    console.log('   Network:', isMainnet ? 'mainnet' : 'testnet')
+    console.log('   Network:', isMainnet ? 'mainnet' : 'testnet', '(detected from', process.env.ARKADE_NETWORK ? 'env var' : 'address', ')')
     console.log('   Ark Server:', arkServerUrl)
+    console.log('   Esplora:', esploraUrl)
 
     // Create wallet instance
     const wallet = await Wallet.create({

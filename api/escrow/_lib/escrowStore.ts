@@ -6,9 +6,9 @@
 
 import { put, list } from '@vercel/blob'
 
-// Escrow wallet configuration
-export const ESCROW_PRIVATE_KEY = process.env.ESCROW_PRIVATE_KEY || ''
-export const ESCROW_ADDRESS = 'ark1qq4hfssprtcgnjzf8qlw2f78yvjau5kldfugg29k34y7j96q2w4t4rrk6z965cxsq33k2t2xcl3mvn0faqk88fqaxef3zj6mfjqwj5xwm3vqcd'
+// Escrow wallet configuration (from Vercel env vars)
+export const ESCROW_PRIVATE_KEY = process.env.ESCROW_WALLET_PRIVATE_KEY || ''
+export const ESCROW_ADDRESS = process.env.ESCROW_WALLET_ADDRESS || 'ark1qq4hfssprtcgnjzf8qlw2f78yvjau5kldfugg29k34y7j96q2w4t4rrk6z965cxsq33k2t2xcl3mvn0faqk88fqaxef3zj6mfjqwj5xwm3vqcd'
 
 export interface EscrowListing {
   punkId: string
