@@ -102,39 +102,12 @@ export async function waitAndClaimPayment(
 }
 
 /**
- * Decode a Lightning invoice to get details
- *
- * @param bolt11 - Lightning invoice string
- * @returns Invoice details
- */
-export async function decodeInvoice(bolt11: string) {
-  const swapProvider = new BoltzSwapProvider({
-    apiUrl: BOLTZ_API,
-    network: NETWORK
-  })
-
-  try {
-    const decoded = await swapProvider.decodeInvoice(bolt11)
-    return {
-      amount: decoded.amount,
-      paymentHash: decoded.paymentHash,
-      description: decoded.description,
-      expiry: decoded.expiry,
-      timestamp: decoded.timestamp
-    }
-  } catch (error: any) {
-    console.error('Failed to decode invoice:', error)
-    throw new Error(`Invalid invoice: ${error.message}`)
-  }
-}
-
-/**
  * Pay a Lightning invoice from Arkade wallet
  *
  * @param wallet - Arkade wallet interface
  * @param bolt11 - Lightning invoice to pay
  * @param maxFeeSats - Optional maximum fee tolerance in sats
- * @returns Payment result with preimage
+ * @returns Payment result with preimage and amount
  */
 export async function payLightningInvoice(
   wallet: ArkadeWalletInterface,
@@ -144,19 +117,18 @@ export async function payLightningInvoice(
   const arkadeLightning = initArkadeLightning(wallet)
 
   try {
-    // Decode invoice first to show user the amount
-    const decoded = await decodeInvoice(bolt11)
-
-    console.log(`💸 Paying ${decoded.amount} sats via Lightning...`)
+    console.log(`💸 Paying Lightning invoice...`)
 
     const result = await arkadeLightning.sendLightningPayment({
       invoice: bolt11,
       maxFeeSats
     })
 
+    console.log(`✅ Payment sent: ${result.amount} sats`)
+
     return {
       preimage: result.preimage,
-      paymentHash: decoded.paymentHash,
+      paymentHash: result.paymentHash,
       amount: result.amount,
       txid: result.txid
     }

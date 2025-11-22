@@ -96,37 +96,22 @@
             v-model="sendInvoice"
             placeholder="lnbc..."
             rows="4"
-            :disabled="isSending"
+            :disabled="isSending || !!sendResult"
           ></textarea>
         </div>
 
-        <div v-if="decodedInvoice" class="invoice-details">
-          <h4>Invoice Details</h4>
-          <p><strong>Amount:</strong> {{ decodedInvoice.amount }} sats</p>
-          <p v-if="decodedInvoice.description"><strong>Description:</strong> {{ decodedInvoice.description }}</p>
-          <p class="fee-warning">Est. fee: ~{{ estimateFee(decodedInvoice.amount, 'send') }} sats</p>
-        </div>
-
         <button
-          v-if="!decodedInvoice"
-          class="btn-primary"
-          @click="decodeSendInvoice"
-          :disabled="!sendInvoice || isDecoding"
-        >
-          {{ isDecoding ? 'Decoding...' : 'Decode Invoice' }}
-        </button>
-
-        <button
-          v-else
+          v-if="!sendResult"
           class="btn-primary"
           @click="payInvoice"
-          :disabled="isSending"
+          :disabled="!sendInvoice || isSending"
         >
-          {{ isSending ? 'Paying...' : `Pay ${decodedInvoice.amount} sats` }}
+          {{ isSending ? 'Paying...' : 'Pay Invoice' }}
         </button>
 
         <div v-if="sendResult" class="result-box success">
           <p>✅ Payment sent successfully!</p>
+          <p><strong>Amount:</strong> {{ sendResult.amount }} sats</p>
           <p><small>Preimage: {{ sendResult.preimage.slice(0, 16) }}...</small></p>
         </div>
 
@@ -135,7 +120,7 @@
         </div>
 
         <button
-          v-if="decodedInvoice || sendResult || sendError"
+          v-if="sendResult || sendError"
           class="btn-secondary"
           @click="resetSend"
         >
@@ -152,7 +137,6 @@ import QRCode from 'qrcode'
 import {
   createReceiveInvoice,
   waitAndClaimPayment,
-  decodeInvoice,
   payLightningInvoice,
   estimateSwapFee
 } from '@/utils/lightningSwaps'
@@ -175,8 +159,6 @@ const copied = ref(false)
 
 // Send state
 const sendInvoice = ref('')
-const decodedInvoice = ref<any>(null)
-const isDecoding = ref(false)
 const isSending = ref(false)
 const sendResult = ref<any>(null)
 const sendError = ref('')
@@ -288,25 +270,6 @@ function resetReceive() {
 }
 
 /**
- * Decode Lightning invoice for sending
- */
-async function decodeSendInvoice() {
-  isDecoding.value = true
-  sendError.value = ''
-
-  try {
-    const decoded = await decodeInvoice(sendInvoice.value.trim())
-    decodedInvoice.value = decoded
-    console.log('✅ Invoice decoded:', decoded)
-  } catch (error: any) {
-    console.error('Failed to decode invoice:', error)
-    sendError.value = error.message
-  } finally {
-    isDecoding.value = false
-  }
-}
-
-/**
  * Pay Lightning invoice
  */
 async function payInvoice() {
@@ -343,7 +306,6 @@ async function payInvoice() {
  */
 function resetSend() {
   sendInvoice.value = ''
-  decodedInvoice.value = null
   sendResult.value = null
   sendError.value = ''
 }
