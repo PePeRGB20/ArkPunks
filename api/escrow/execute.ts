@@ -85,15 +85,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(410).json({ error: 'Listing cancelled' })
     }
 
-    if (listing.status !== 'deposited') {
-      return res.status(400).json({
-        error: 'Deposits not complete',
-        status: listing.status,
-        message: 'Both seller and buyer must deposit funds before execution'
-      })
-    }
-
-    console.log('✅ Verified: All deposits received')
+    console.log('✅ Buyer verified, checking deposits...')
     console.log('   Escrow address:', listing.escrowAddress)
     console.log('   Seller address:', listing.sellerArkAddress)
     console.log('   Buyer address:', listing.buyerAddress)
