@@ -87,6 +87,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
 
     console.log('✅ Buy intent registered')
+    console.log(`   Updated listing with buyer info:`)
+    console.log(`   - buyerPubkey: ${buyerPubkey}`)
+    console.log(`   - buyerAddress: ${buyerArkAddress}`)
+
+    // Verify the update was persisted
+    const updatedListing = await getEscrowListing(punkId)
+    console.log(`   Verification - stored buyerPubkey: ${updatedListing?.buyerPubkey || 'MISSING'}`)
+    console.log(`   Verification - stored buyerAddress: ${updatedListing?.buyerAddress || 'MISSING'}`)
 
     // Return payment instructions to buyer
     const response: BuyResponse = {
