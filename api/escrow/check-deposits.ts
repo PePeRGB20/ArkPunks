@@ -30,8 +30,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       })
     }
 
-    // Calculate total sats
-    const totalSats = vtxos.reduce((sum, v) => sum + Number(v.vtxo.amount), 0)
+    // Debug: Log first VTXO structure
+    if (vtxos.length > 0) {
+      console.log('   VTXO structure sample:', JSON.stringify(vtxos[0], null, 2))
+    }
+
+    // Calculate total sats - handle different possible structures
+    const totalSats = vtxos.reduce((sum, v) => {
+      const amount = v.vtxo?.amount || v.amount || 0
+      return sum + Number(amount)
+    }, 0)
     console.log(`   Total: ${totalSats} sats`)
 
     // Get all listings to match VTXOs to sellers
@@ -54,14 +62,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let unmatched = 0
 
     for (const vtxo of vtxos) {
-      const outpoint = `${vtxo.vtxo.outpoint.txid}:${vtxo.vtxo.outpoint.vout}`
+      // Handle different possible VTXO structures
+      const vtxoData = vtxo.vtxo || vtxo
+      const outpoint = `${vtxoData.outpoint.txid}:${vtxoData.outpoint.vout}`
+      const amount = vtxoData.amount || 0
+
       const listing = vtxoToListing.get(outpoint)
 
       if (listing) {
         matched++
         vtxoDetails.push({
           outpoint,
-          amount: vtxo.vtxo.amount,
+          amount,
           status: 'matched',
           punkId: listing.punkId,
           sellerPubkey: listing.sellerPubkey,
@@ -72,17 +84,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         })
 
         console.log(`   ✅ ${outpoint.slice(0, 16)}... → ${listing.sellerArkAddress.slice(0, 20)}...`)
-        console.log(`      Punk: ${listing.punkId.slice(0, 16)}... | Amount: ${vtxo.vtxo.amount} sats`)
+        console.log(`      Punk: ${listing.punkId.slice(0, 16)}... | Amount: ${amount} sats`)
       } else {
         unmatched++
         vtxoDetails.push({
           outpoint,
-          amount: vtxo.vtxo.amount,
+          amount,
           status: 'unmatched',
           warning: 'No matching listing found in blob storage'
         })
 
-        console.warn(`   ⚠️ ${outpoint.slice(0, 16)}... → NO MATCH (${vtxo.vtxo.amount} sats)`)
+        console.warn(`   ⚠️ ${outpoint.slice(0, 16)}... → NO MATCH (${amount} sats)`)
       }
     }
 
