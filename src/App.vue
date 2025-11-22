@@ -207,6 +207,18 @@ const samplePunks = computed(() => {
   })
 
   console.log('   ✅ Filtered punks for this wallet:', filtered.length)
+  console.log('   📊 Official punks map size in gallery:', officialPunksMap.value.size)
+
+  // Debug: Check which filtered punks are official
+  if (filtered.length > 0 && officialPunksMap.value.size > 0) {
+    console.log('   🔍 Checking which gallery punks are official:')
+    filtered.forEach(punk => {
+      const isOff = officialPunksMap.value.has(punk.punkId)
+      const idx = officialPunksMap.value.get(punk.punkId)
+      console.log(`      ${punk.punkId.slice(0, 8)}... → ${isOff ? `✅ Official #${idx}` : '❌ Not official'}`)
+    })
+  }
+
   return filtered
 })
 
