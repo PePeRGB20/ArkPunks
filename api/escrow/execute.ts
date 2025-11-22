@@ -184,6 +184,49 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       paymentTransferTxid: paymentTxid
     })
 
+    // Publish KIND_PUNK_SOLD event so the buyer/seller tracking works
+    console.log(`📝 Publishing sold event for ${listing.punkId}...`)
+    try {
+      const { SimplePool, finalizeEvent } = await import('nostr-tools')
+      const { hex } = await import('@scure/base')
+
+      const RELAYS = [
+        'wss://relay.damus.io',
+        'wss://nos.lol',
+        'wss://nostr.wine',
+        'wss://relay.snort.social'
+      ]
+      const KIND_PUNK_SOLD = 1404
+
+      const currentNetwork = process.env.VITE_ARKADE_NETWORK || 'mainnet'
+
+      const soldEventTemplate = {
+        kind: KIND_PUNK_SOLD,
+        created_at: Math.floor(Date.now() / 1000),
+        tags: [
+          ['t', 'arkade-punk-sold'],
+          ['punk_id', listing.punkId],
+          ['seller', listing.sellerPubkey],
+          ['buyer', listing.buyerPubkey!],
+          ['price', listing.price],
+          ['txid', paymentTxid],
+          ['network', currentNetwork]
+        ],
+        content: `Punk ${listing.punkId} sold via escrow for ${listing.price} sats`
+      }
+
+      const signedSoldEvent = finalizeEvent(soldEventTemplate, hex.decode(ESCROW_PRIVATE_KEY))
+
+      const pool = new SimplePool()
+      await Promise.any(pool.publish(RELAYS, signedSoldEvent))
+      pool.close(RELAYS)
+
+      console.log(`✅ Sold event published to Nostr!`)
+    } catch (soldEventError: any) {
+      console.error('⚠️ Failed to publish sold event:', soldEventError)
+      // Don't fail the whole transaction if Nostr fails
+    }
+
     console.log('✅ Escrow execution completed')
 
     const response: ExecuteResponse = {
