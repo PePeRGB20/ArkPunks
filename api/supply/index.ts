@@ -26,52 +26,67 @@ interface SupplyCache {
 let memoryCache: SupplyCache | null = null
 
 /**
- * Fetch fresh supply from Nostr relay
+ * Fetch fresh supply from Nostr relay with retry logic
+ * The relay sometimes returns incomplete results, so we query 3 times and take the maximum
  */
 async function fetchSupplyFromRelay(userAgent?: string): Promise<SupplyCache> {
   console.log('📡 Fetching fresh supply from Nostr relay...')
   console.log(`   Triggered by: ${userAgent || 'unknown'}`)
 
   const pool = new SimplePool()
+  const attempts = 3
+  let maxCount = 0
+  let bestPunkMap = new Map()
 
   try {
-    const allEvents = await pool.querySync([OFFICIAL_RELAY], {
-      kinds: [KIND_PUNK_MINT],
-      '#t': ['arkade-punk'],
-      limit: 1100
-    })
+    // Query multiple times and take the maximum (relay is unreliable)
+    for (let i = 0; i < attempts; i++) {
+      const allEvents = await pool.querySync([OFFICIAL_RELAY], {
+        kinds: [KIND_PUNK_MINT],
+        '#t': ['arkade-punk'],
+        limit: 2000 // Increased from 1100
+      })
 
-    console.log(`   Found ${allEvents.length} total events`)
+      console.log(`   Attempt ${i + 1}/${attempts}: Found ${allEvents.length} total events`)
 
-    // Filter by network AND server signature (only official punks)
-    const events = allEvents.filter(e => {
-      const networkTag = e.tags.find(t => t[0] === 'network')
-      const serverSigTag = e.tags.find(t => t[0] === 'server_sig')
-      return networkTag?.[1] === 'mainnet' && serverSigTag
-    })
+      // Filter by network AND server signature (only official punks)
+      const events = allEvents.filter(e => {
+        const networkTag = e.tags.find(t => t[0] === 'network')
+        const serverSigTag = e.tags.find(t => t[0] === 'server_sig')
+        return networkTag?.[1] === 'mainnet' && serverSigTag
+      })
 
-    console.log(`   Found ${events.length} official punk events`)
+      // Deduplicate by punkId (keep earliest)
+      const punkMap = new Map()
+      for (const event of events) {
+        const punkIdTag = event.tags.find(t => t[0] === 'punk_id')
+        if (!punkIdTag) continue
 
-    // Deduplicate by punkId (keep earliest)
-    const punkMap = new Map()
-    for (const event of events) {
-      const punkIdTag = event.tags.find(t => t[0] === 'punk_id')
-      if (!punkIdTag) continue
+        const punkId = punkIdTag[1]
+        const existing = punkMap.get(punkId)
 
-      const punkId = punkIdTag[1]
-      const existing = punkMap.get(punkId)
-
-      if (!existing || event.created_at < existing.created_at) {
-        punkMap.set(punkId, event)
+        if (!existing || event.created_at < existing.created_at) {
+          punkMap.set(punkId, event)
+        }
       }
+
+      const count = punkMap.size
+      console.log(`   Attempt ${i + 1}: ${count} unique punks`)
+
+      // Keep the highest count
+      if (count > maxCount) {
+        maxCount = count
+        bestPunkMap = punkMap
+      }
+
+      // If we hit the max expected, no need to retry
+      if (count >= 1000) break
     }
 
-    const totalMinted = punkMap.size
-
-    console.log(`✅ Loaded ${totalMinted} unique punks`)
+    console.log(`✅ Best result: ${maxCount} unique punks (from ${attempts} attempts)`)
 
     return {
-      totalMinted,
+      totalMinted: maxCount,
       maxPunks: 1000,
       lastUpdated: Date.now(),
       updatedBy: userAgent
