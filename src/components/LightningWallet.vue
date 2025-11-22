@@ -147,8 +147,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
-import { useStore } from 'vuex'
+import { ref, onMounted, watch, inject } from 'vue'
 import QRCode from 'qrcode'
 import {
   createReceiveInvoice,
@@ -157,8 +156,10 @@ import {
   payLightningInvoice,
   estimateSwapFee
 } from '@/utils/lightningSwaps'
+import type { ArkadeWalletInterface } from '@/utils/arkadeWallet'
 
-const store = useStore()
+// Get wallet from parent via injection
+const getWallet = inject<() => ArkadeWalletInterface | null>('getWallet')
 
 // Tabs
 const activeTab = ref<'receive' | 'send'>('receive')
@@ -188,7 +189,7 @@ async function generateInvoice() {
   errorMessage.value = ''
 
   try {
-    const wallet = store.state.wallet
+    const wallet = getWallet?.()
 
     if (!wallet) {
       throw new Error('No wallet connected')
@@ -251,10 +252,7 @@ async function monitorPayment(wallet: any, swapId: string) {
     console.log('✅ Payment claimed:', txid)
     paymentStatus.value = 'completed'
 
-    // Refresh wallet balance
-    setTimeout(() => {
-      store.dispatch('refreshWallet')
-    }, 1000)
+    // Wallet balance will refresh automatically via WalletConnect polling
 
   } catch (error: any) {
     console.error('Payment monitoring failed:', error)
@@ -314,7 +312,7 @@ async function payInvoice() {
   sendResult.value = null
 
   try {
-    const wallet = store.state.wallet
+    const wallet = getWallet?.()
 
     if (!wallet) {
       throw new Error('No wallet connected')
@@ -327,10 +325,7 @@ async function payInvoice() {
 
     console.log('✅ Payment sent:', result)
 
-    // Refresh wallet balance
-    setTimeout(() => {
-      store.dispatch('refreshWallet')
-    }, 1000)
+    // Wallet balance will refresh automatically via WalletConnect polling
 
   } catch (error: any) {
     console.error('Failed to pay invoice:', error)
