@@ -10,6 +10,17 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { getEscrowListing, updateEscrowStatus } from './_lib/escrowStore.js'
 import { getEscrowWallet } from './_lib/escrowArkadeWallet.js'
+import { SimplePool, finalizeEvent, type EventTemplate } from 'nostr-tools'
+import { hex } from '@scure/base'
+
+const RELAYS = [
+  'wss://relay.damus.io',
+  'wss://nos.lol',
+  'wss://nostr.wine',
+  'wss://relay.snort.social'
+]
+
+const KIND_PUNK_LISTING = 1401
 
 interface CancelRequest {
   punkId: string
@@ -107,35 +118,84 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const escrowWallet = await getEscrowWallet()
 
         // Find the punk VTXO in escrow wallet
+        // SDK returns flat structure: { txid, vout, value }
         const vtxos = await escrowWallet.getVtxos()
-        const punkVtxo = vtxos.find(v =>
-          `${v.vtxo.outpoint.txid}:${v.vtxo.outpoint.vout}` === listing.punkVtxoOutpoint
+
+        console.log(`   Searching for VTXO outpoint: ${listing.punkVtxoOutpoint}`)
+        console.log(`   Available VTXOs: ${vtxos.length}`)
+
+        // Try to find by exact outpoint first
+        let punkVtxo = vtxos.find(v =>
+          `${v.txid}:${v.vout}` === listing.punkVtxoOutpoint
         )
+
+        // If not found by outpoint (may have changed due to Arkade round),
+        // try to find by value (punk VTXOs are typically ~10,100 sats)
+        if (!punkVtxo && listing.punkVtxoOutpoint !== 'unknown') {
+          console.warn('   ⚠️ Exact VTXO not found, searching by value...')
+          punkVtxo = vtxos.find(v => v.value >= 10000 && v.value <= 10500)
+
+          if (punkVtxo) {
+            console.log(`   📍 Found punk-sized VTXO: ${punkVtxo.txid}:${punkVtxo.vout}`)
+          }
+        }
 
         if (!punkVtxo) {
           console.error('❌ Punk VTXO not found in escrow wallet')
           console.error(`   Expected outpoint: ${listing.punkVtxoOutpoint}`)
-          console.error(`   Available VTXOs: ${vtxos.length}`)
+          console.error(`   Available VTXOs:`)
           vtxos.forEach(v => {
-            console.error(`   - ${v.vtxo.outpoint.txid}:${v.vtxo.outpoint.vout}`)
+            console.error(`   - ${v.txid}:${v.vout} (${v.value} sats)`)
           })
 
           return res.status(500).json({
             error: 'Punk VTXO not found in escrow wallet',
-            details: 'The punk may have already been returned or sold'
+            details: 'The punk may have been affected by an Arkade round. Please contact support for manual return.'
           })
         }
 
-        console.log(`   Found punk VTXO: ${punkVtxo.vtxo.amount} sats`)
+        console.log(`   Found punk VTXO: ${punkVtxo.value} sats at ${punkVtxo.txid}:${punkVtxo.vout}`)
 
         // Send punk back to seller
         const txid = await escrowWallet.send(
           sellerArkAddress,
-          BigInt(punkVtxo.vtxo.amount),
-          undefined
+          BigInt(punkVtxo.value)
         )
 
         console.log(`✅ Punk returned to seller: ${txid}`)
+
+        // Publish delist event to Nostr (using seller's key)
+        // NOTE: Client should also publish this event for redundancy
+        console.log('   Publishing delist event to Nostr...')
+
+        try {
+          const pool = new SimplePool()
+          const currentNetwork = 'mainnet'
+
+          const delistEvent: EventTemplate = {
+            kind: KIND_PUNK_LISTING,
+            created_at: Math.floor(Date.now() / 1000),
+            tags: [
+              ['t', 'arkade-punk-delist'],
+              ['punk_id', punkId],
+              ['price', '0'],
+              ['network', currentNetwork],
+              ['sale_mode', 'escrow']
+            ],
+            content: `Listing cancelled by seller`
+          }
+
+          // Sign with seller's key (this requires seller to provide signature)
+          // For now, we rely on client-side delist + blob storage removal
+          // TODO: Implement server-side delist event signing
+
+          console.log('   ⚠️ Server-side Nostr delist not implemented - relying on client-side delist')
+
+          pool.close(RELAYS)
+        } catch (error: any) {
+          console.warn('   ⚠️ Failed to publish delist event:', error.message)
+          // Don't fail the whole operation if delist publishing fails
+        }
 
         // Update listing status
         await updateEscrowStatus(punkId, 'cancelled', {
@@ -150,7 +210,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           message: 'Punk returned to your wallet',
           details: {
             returnAddress: sellerArkAddress,
-            amount: punkVtxo.vtxo.amount
+            amount: punkVtxo.value
           }
         })
 
