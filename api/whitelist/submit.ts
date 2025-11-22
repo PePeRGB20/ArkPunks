@@ -2,15 +2,17 @@
  * Auto-Whitelist Submit API
  *
  * Accepts punk IDs from users that were minted locally but never published to Nostr.
- * These are from the launch period when Nostr publishing had issues.
+ * These are from the launch period (Nov 22, 2024 11:00 UTC onwards) when Nostr publishing had issues.
+ *
+ * NOTE: No time-based validation is enforced - any punk can be submitted.
+ * The frontend auto-detects punks in localStorage that don't exist on Nostr.
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { put, list } from '@vercel/blob'
 
-// Launch window: First 6 hours after launch
+// Launch date for reference (no cutoff enforced)
 const LAUNCH_DATE = new Date('2024-11-22T11:00:00Z') // Nov 22, 2024, 12:00 CET
-const CUTOFF_DATE = new Date(LAUNCH_DATE.getTime() + 6 * 60 * 60 * 1000)
 
 interface WhitelistEntry {
   punkId: string
