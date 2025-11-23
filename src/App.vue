@@ -828,8 +828,17 @@ async function listPunk(punk: PunkState) {
       const allVtxos = await wallet.getVtxos()
       console.log(`   Available VTXOs: ${allVtxos.length}`)
 
+      // Debug: Log first VTXO structure to verify
+      if (allVtxos.length > 0) {
+        console.log('   🔍 First VTXO structure:', JSON.stringify(allVtxos[0], null, 2))
+      }
+
       // Find any punk-sized VTXO (between 9,900 and 10,200 sats)
-      const punkSizedVtxos = allVtxos.filter(v => v.value >= 9900 && v.value <= 10200)
+      // Note: VTXOs from wallet.getVtxos() have structure: { vtxo: { amount: string, ... }, ... }
+      const punkSizedVtxos = allVtxos.filter(v => {
+        const amount = Number(v.vtxo.amount)
+        return amount >= 9900 && amount <= 10200
+      })
       console.log(`   Found ${punkSizedVtxos.length} punk-sized VTXO(s)`)
 
       if (punkSizedVtxos.length === 0) {
@@ -845,14 +854,15 @@ async function listPunk(punk: PunkState) {
 
       // Use the first available punk-sized VTXO
       const punkVtxo = punkSizedVtxos[0]
-      const vtxoOutpoint = `${punkVtxo.txid}:${punkVtxo.vout}`
-      console.log(`   ✅ Using VTXO: ${vtxoOutpoint} (${punkVtxo.value} sats)`)
+      const vtxoOutpoint = `${punkVtxo.vtxo.outpoint.txid}:${punkVtxo.vtxo.outpoint.vout}`
+      const amount = Number(punkVtxo.vtxo.amount)
+      console.log(`   ✅ Using VTXO: ${vtxoOutpoint} (${amount} sats)`)
 
       // Send punk collateral to escrow address
-      console.log(`📤 Sending ${punkVtxo.value} sats to escrow: ${escrowAddress}`)
+      console.log(`📤 Sending ${amount} sats to escrow: ${escrowAddress}`)
 
       try {
-        const txid = await wallet.send(escrowAddress, BigInt(punkVtxo.value))
+        const txid = await wallet.send(escrowAddress, BigInt(amount))
         console.log(`✅ Collateral sent to escrow! Txid: ${txid}`)
 
         // The escrow will receive the VTXO at txid:0 (recipient gets vout 0)
@@ -868,7 +878,7 @@ async function listPunk(punk: PunkState) {
         alert(
           `✅ Success!\n\n` +
           `${punk.metadata.name} has been listed in escrow.\n\n` +
-          `Collateral sent: ${punkVtxo.value.toLocaleString()} sats\n` +
+          `Collateral sent: ${amount.toLocaleString()} sats\n` +
           `Transaction ID: ${txid}\n\n` +
           `Your listing is now active in the marketplace!\n` +
           `The punk will show as "🛡️ In Escrow" (grayed out) in your gallery.\n\n` +
