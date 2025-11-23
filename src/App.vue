@@ -623,7 +623,7 @@ async function delistPunkFromMarket(punk: PunkState) {
         if (punkIndex !== -1) {
           allPunks.value[punkIndex].inEscrow = false
           allPunks.value[punkIndex].listingPrice = 0n
-          savePunksToLocalStorage()
+          localStorage.setItem('arkade_punks', JSON.stringify(allPunks.value))
           console.log(`✅ Cleared escrow flag for punk ${punk.punkId.slice(0, 8)}...`)
         }
       }
