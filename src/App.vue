@@ -958,11 +958,11 @@ async function listPunk(punk: PunkState) {
 
       // If escrow mode, mark punk as in escrow
       if (saleMode === 'escrow') {
-        const punkIndex = punks.value.findIndex(p => p.punkId === punk.punkId)
+        const punkIndex = allPunks.value.findIndex(p => p.punkId === punk.punkId)
         if (punkIndex !== -1) {
-          punks.value[punkIndex].inEscrow = true
-          punks.value[punkIndex].listingPrice = BigInt(price)
-          savePunksToLocalStorage()
+          allPunks.value[punkIndex].inEscrow = true
+          allPunks.value[punkIndex].listingPrice = BigInt(price)
+          localStorage.setItem('arkade_punks', JSON.stringify(allPunks.value))
           console.log(`✅ Marked punk ${punk.punkId.slice(0, 8)}... as in escrow`)
         }
       }
