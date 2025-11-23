@@ -194,11 +194,27 @@
           </div>
           <div v-if="showTroubleshooting" class="troubleshooting-content">
             <p class="info-text">
-              If you're getting <strong>VTXO_RECOVERABLE</strong> errors when minting:<br>
-              Your VTXOs may have expired and need to be recovered.
+              <strong>Getting VTXO_RECOVERABLE errors?</strong><br><br>
+
+              <span v-if="balance.preconfirmed > 0n">
+                ⏳ You have <strong>{{ balance.preconfirmed }}</strong> sats in preconfirmed VTXOs.<br>
+                These need to complete the Arkade round cycle (1-2 minutes).<br>
+                <strong>Just wait a few minutes and refresh your balance.</strong>
+              </span>
+              <span v-else-if="balance.recoverable > 0n">
+                🔄 You have <strong>{{ balance.recoverable }}</strong> sats in recoverable VTXOs.<br>
+                These can be recovered using the button below.
+              </span>
+              <span v-else>
+                Your VTXOs look normal. Try refreshing your balance.
+              </span>
             </p>
-            <button @click="recoverExpiredVtxos" class="btn-recover" :disabled="recovering">
-              {{ recovering ? 'Recovering...' : '🔄 Recover Expired VTXOs' }}
+            <button
+              v-if="balance.recoverable > 0n"
+              @click="recoverExpiredVtxos"
+              class="btn-recover"
+              :disabled="recovering">
+              {{ recovering ? 'Recovering...' : '🔄 Recover Swept VTXOs' }}
             </button>
           </div>
         </div>
@@ -893,6 +909,11 @@ async function generateQRCode(retryCount = 0) {
 
 async function updateWalletInfo() {
   if (!wallet) return
+
+  // Expose wallet globally for debugging in console
+  if (typeof window !== 'undefined') {
+    (window as any).__debugWallet = wallet
+  }
 
   const info = await getWalletInfo(wallet)
   walletAddress.value = info.address
