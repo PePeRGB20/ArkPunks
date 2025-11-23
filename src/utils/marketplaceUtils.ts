@@ -568,7 +568,9 @@ export async function syncPunksFromNostr(
 
     // Check for active escrow listings by this user
     // These are punks currently held in escrow (listed but not sold)
-    const myEscrowListings = new Set<string>()
+    // Track latest listing event per punk to handle delist events properly
+    const latestEscrowListings = new Map<string, { price: bigint; timestamp: number }>()
+
     for (const event of listingEvents) {
       // Only check listings by this user in escrow mode
       if (event.pubkey !== myPubkey) continue
@@ -577,13 +579,28 @@ export async function syncPunksFromNostr(
       const priceTag = event.tags.find(t => t[0] === 'price')
       const punkIdTag = event.tags.find(t => t[0] === 'punk_id')
 
-      // Must be escrow mode, active (price > 0), and have punk ID
-      if (saleModeTag?.[1] === 'escrow' &&
-          priceTag &&
-          BigInt(priceTag[1]) > 0n &&
-          punkIdTag) {
-        myEscrowListings.add(punkIdTag[1])
-        console.log(`   📦 Found escrow listing: ${punkIdTag[1].slice(0, 8)}...`)
+      // Must be escrow mode and have punk ID
+      if (saleModeTag?.[1] === 'escrow' && priceTag && punkIdTag) {
+        const punkId = punkIdTag[1]
+        const price = BigInt(priceTag[1])
+        const timestamp = event.created_at
+
+        const existing = latestEscrowListings.get(punkId)
+        // Keep only the latest listing event for each punk
+        if (!existing || timestamp > existing.timestamp) {
+          latestEscrowListings.set(punkId, { price, timestamp })
+        }
+      }
+    }
+
+    // Build set of actively listed punks (price > 0 in latest event)
+    const myEscrowListings = new Set<string>()
+    for (const [punkId, listing] of latestEscrowListings.entries()) {
+      if (listing.price > 0n) {
+        myEscrowListings.add(punkId)
+        console.log(`   📦 Found escrow listing: ${punkId.slice(0, 8)}... (${listing.price} sats)`)
+      } else {
+        console.log(`   ✅ Punk ${punkId.slice(0, 8)}... delisted from escrow (price=0)`)
       }
     }
 
