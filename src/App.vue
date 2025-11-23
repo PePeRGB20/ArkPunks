@@ -821,19 +821,31 @@ async function listPunk(punk: PunkState) {
 
       // Get all VTXOs to find the punk VTXO value
       console.log('📋 Finding punk VTXO...')
+      console.log(`   Looking for outpoint: ${punk.vtxoOutpoint}`)
+
       const allVtxos = await wallet.getVtxos()
+      console.log(`   Available VTXOs (${allVtxos.length}):`)
+      allVtxos.forEach((v, i) => {
+        const outpoint = `${v.txid}:${v.vout}`
+        console.log(`      ${i + 1}. ${outpoint} (${v.value} sats)`)
+      })
+
       const punkVtxo = allVtxos.find(v => `${v.txid}:${v.vout}` === punk.vtxoOutpoint)
 
       if (!punkVtxo) {
+        console.error('❌ Punk VTXO not found!')
+        console.error(`   Expected: ${punk.vtxoOutpoint}`)
         alert(
           `❌ Error: Could not find punk VTXO in your wallet.\n\n` +
-          `Outpoint: ${punk.vtxoOutpoint}\n\n` +
-          `Please refresh your punk list and try again.`
+          `Expected outpoint: ${punk.vtxoOutpoint}\n\n` +
+          `This punk may have been affected by an Arkade round.\n` +
+          `Available VTXOs: ${allVtxos.length}\n\n` +
+          `Please try syncing your punks from Nostr to refresh the outpoints.`
         )
         return
       }
 
-      console.log(`   Found punk VTXO: ${punkVtxo.value} sats`)
+      console.log(`   ✅ Found punk VTXO: ${punkVtxo.value} sats at ${punkVtxo.txid}:${punkVtxo.vout}`)
 
       // Send punk VTXO to escrow address
       console.log(`📤 Sending punk VTXO to escrow address: ${escrowAddress}`)
