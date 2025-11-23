@@ -185,6 +185,27 @@ export async function getMarketplaceListings(): Promise<MarketplaceListing[]> {
           continue
         }
 
+        // For escrow listings, verify against blob storage to exclude sold/cancelled
+        if (saleMode === 'escrow') {
+          try {
+            const { getEscrowListing } = await import('./escrowApi')
+            const blobListing = await getEscrowListing(punkId)
+
+            if (blobListing && (blobListing.status === 'sold' || blobListing.status === 'cancelled')) {
+              console.log(`   ⏭️  Skipping ${blobListing.status} escrow punk: ${punkId.slice(0, 8)}... (blob status: ${blobListing.status})`)
+              continue
+            }
+
+            if (!blobListing) {
+              console.warn(`   ⚠️  Escrow listing in Nostr but not in blob: ${punkId.slice(0, 8)}... - skipping for safety`)
+              continue
+            }
+          } catch (blobError) {
+            console.warn(`   ⚠️  Failed to verify escrow listing against blob for ${punkId.slice(0, 8)}:`, blobError)
+            // Continue showing the listing if blob check fails (don't break marketplace)
+          }
+        }
+
         // Must have compressed and ark_address for active listings
         if (!compressedTag || !arkAddressTag) {
           continue
@@ -647,11 +668,16 @@ export async function syncPunksFromNostr(
       inEscrow?: boolean // true if in escrow
     }>()
 
+    // Store compressed metadata from sold events (for escrow purchases)
+    // This allows buyers to recover punks without finding the original mint event
+    const soldPunksMetadata = new Map<string, string>()
+
     // Process sold events (marketplace sales)
     for (const event of soldEvents) {
       const punkIdTag = event.tags.find(t => t[0] === 'punk_id')
       const sellerTag = event.tags.find(t => t[0] === 'seller')
       const buyerTag = event.tags.find(t => t[0] === 'buyer')
+      const compressedTag = event.tags.find(t => t[0] === 'compressed')
 
       if (!punkIdTag || !sellerTag || !buyerTag) continue
 
@@ -659,6 +685,11 @@ export async function syncPunksFromNostr(
       const seller = sellerTag[1]
       const buyer = buyerTag[1]
       const timestamp = event.created_at
+
+      // Store compressed metadata if available (escrow sales include this)
+      if (compressedTag && compressedTag[1]) {
+        soldPunksMetadata.set(punkId, compressedTag[1])
+      }
 
       const existing = punkOwnership.get(punkId)
 
@@ -797,64 +828,112 @@ export async function syncPunksFromNostr(
       }
     }
 
-    // For bought punks, fetch all mint events and recover metadata
+    // For bought punks, recover metadata from sold events or mint events
     if (boughtPunks.length > 0) {
       console.log(`   Found ${boughtPunks.length} punks bought on marketplace`)
 
-      // Fetch ALL mint events (can't filter by punk_id as it's not indexed)
-      const allMintEvents = await pool.querySync(RELAYS, {
-        kinds: [KIND_PUNK_MINT],
-        limit: 5000
-      })
+      // First, try to recover from sold events metadata (faster, works for escrow purchases)
+      const punksNeedingMintEvents: string[] = []
 
-      // Try to find these punks in the mint events
       for (const punkId of boughtPunks) {
-        // Find mint event for this punk ID (client-side filtering)
-        const mintEvent = allMintEvents.find(event => {
-          const punkIdTag = event.tags.find(t => t[0] === 'punk_id')
-          return punkIdTag && punkIdTag[1] === punkId
-        })
+        const compressedHex = soldPunksMetadata.get(punkId)
 
-        if (mintEvent) {
+        if (compressedHex) {
           try {
-            // Mint events use 'data' tag, not 'compressed'
-            const compressedTag = mintEvent.tags.find(t => t[0] === 'data')
-            const vtxoTag = mintEvent.tags.find(t => t[0] === 'vtxo')
+            // Recover from sold event metadata (escrow purchases)
+            const hexMatch = compressedHex.match(/.{1,2}/g)
 
-            if (compressedTag) {
-              const compressedHex = compressedTag[1]
-              const hexMatch = compressedHex.match(/.{1,2}/g)
+            if (hexMatch) {
+              const compressedBytes = new Uint8Array(
+                hexMatch.map(byte => parseInt(byte, 16))
+              )
+              const metadata = decompressPunkMetadata({ data: compressedBytes }, punkId)
+              const vtxoOutpoint = `${punkId}:0`
 
-              if (hexMatch) {
-                const compressedBytes = new Uint8Array(
-                  hexMatch.map(byte => parseInt(byte, 16))
-                )
-                const metadata = decompressPunkMetadata({ data: compressedBytes }, punkId)
-                const vtxoOutpoint = vtxoTag?.[1] || `${punkId}:0`
+              const ownership = punkOwnership.get(punkId)
+              const isInEscrow = myEscrowListings.has(punkId)
 
-                const ownership = punkOwnership.get(punkId)
-                const isInEscrow = myEscrowListings.has(punkId)
+              recoveredPunks.push({
+                punkId,
+                owner: walletAddress,
+                metadata,
+                vtxoOutpoint,
+                inEscrow: isInEscrow || ownership?.inEscrow || false
+              })
 
-                recoveredPunks.push({
-                  punkId,
-                  owner: walletAddress,
-                  metadata,
-                  vtxoOutpoint,
-                  inEscrow: isInEscrow || ownership?.inEscrow || false
-                })
-
-                if (isInEscrow) {
-                  console.log(`   ✅ Recovered bought punk (in escrow): ${metadata.name}`)
-                } else {
-                  console.log(`   ✅ Recovered bought punk: ${metadata.name}`)
-                }
+              if (isInEscrow) {
+                console.log(`   ✅ Recovered bought punk (escrow, from sold event): ${metadata.name}`)
+              } else {
+                console.log(`   ✅ Recovered bought punk (from sold event): ${metadata.name}`)
               }
             }
           } catch (err) {
-            console.warn(`   Failed to recover bought punk ${punkId}:`, err)
+            console.warn(`   Failed to recover bought punk from sold event ${punkId}:`, err)
+            punksNeedingMintEvents.push(punkId)
           }
         } else {
-          console.warn(`   Could not find mint event for bought punk ${punkId}`)
+          // No metadata in sold event, need to find mint event
+          punksNeedingMintEvents.push(punkId)
+        }
+      }
+
+      // For punks without sold event metadata, fetch mint events
+      if (punksNeedingMintEvents.length > 0) {
+        console.log(`   Fetching mint events for ${punksNeedingMintEvents.length} punks...`)
+
+        const allMintEvents = await pool.querySync(RELAYS, {
+          kinds: [KIND_PUNK_MINT],
+          limit: 5000
+        })
+
+        for (const punkId of punksNeedingMintEvents) {
+          // Find mint event for this punk ID (client-side filtering)
+          const mintEvent = allMintEvents.find(event => {
+            const punkIdTag = event.tags.find(t => t[0] === 'punk_id')
+            return punkIdTag && punkIdTag[1] === punkId
+          })
+
+          if (mintEvent) {
+            try {
+              // Mint events use 'data' tag, not 'compressed'
+              const compressedTag = mintEvent.tags.find(t => t[0] === 'data')
+              const vtxoTag = mintEvent.tags.find(t => t[0] === 'vtxo')
+
+              if (compressedTag) {
+                const compressedHex = compressedTag[1]
+                const hexMatch = compressedHex.match(/.{1,2}/g)
+
+                if (hexMatch) {
+                  const compressedBytes = new Uint8Array(
+                    hexMatch.map(byte => parseInt(byte, 16))
+                  )
+                  const metadata = decompressPunkMetadata({ data: compressedBytes }, punkId)
+                  const vtxoOutpoint = vtxoTag?.[1] || `${punkId}:0`
+
+                  const ownership = punkOwnership.get(punkId)
+                  const isInEscrow = myEscrowListings.has(punkId)
+
+                  recoveredPunks.push({
+                    punkId,
+                    owner: walletAddress,
+                    metadata,
+                    vtxoOutpoint,
+                    inEscrow: isInEscrow || ownership?.inEscrow || false
+                  })
+
+                  if (isInEscrow) {
+                    console.log(`   ✅ Recovered bought punk (in escrow, from mint): ${metadata.name}`)
+                  } else {
+                    console.log(`   ✅ Recovered bought punk (from mint): ${metadata.name}`)
+                  }
+                }
+              }
+            } catch (err) {
+              console.warn(`   Failed to recover bought punk ${punkId}:`, err)
+            }
+          } else {
+            console.warn(`   Could not find mint event for bought punk ${punkId}`)
+          }
         }
       }
     }

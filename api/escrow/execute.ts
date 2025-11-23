@@ -143,7 +143,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         'wss://nostr.wine',
         'wss://relay.snort.social'
       ]
-      const KIND_PUNK_TRANSFER = 1403
+      const KIND_PUNK_TRANSFER = 1403  // Must match frontend constant
 
       // Determine network (default mainnet)
       const currentNetwork = process.env.VITE_ARKADE_NETWORK || 'mainnet'
@@ -196,9 +196,43 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         'wss://nostr.wine',
         'wss://relay.snort.social'
       ]
-      const KIND_PUNK_SOLD = 1404
+      const KIND_PUNK_LISTING = 1401
+      const KIND_PUNK_SOLD = 1402  // Must match frontend constant
 
       const currentNetwork = process.env.VITE_ARKADE_NETWORK || 'mainnet'
+
+      // Fetch the original listing event to get compressed metadata for the buyer
+      console.log(`   🔍 Fetching original listing event to get metadata...`)
+      const pool = new SimplePool()
+      let compressedMetadata = ''
+
+      try {
+        const listingEvents = await pool.querySync(RELAYS, {
+          kinds: [KIND_PUNK_LISTING],
+          authors: [listing.sellerPubkey],
+          limit: 100
+        })
+
+        // Find the listing event for this specific punk
+        const listingEvent = listingEvents.find(e => {
+          const punkIdTag = e.tags.find(t => t[0] === 'punk_id')
+          return punkIdTag && punkIdTag[1] === listing.punkId
+        })
+
+        if (listingEvent) {
+          const compressedTag = listingEvent.tags.find(t => t[0] === 'compressed')
+          if (compressedTag) {
+            compressedMetadata = compressedTag[1]
+            console.log(`   ✅ Found compressed metadata (${compressedMetadata.length} chars)`)
+          } else {
+            console.warn(`   ⚠️  Listing event found but no compressed tag`)
+          }
+        } else {
+          console.warn(`   ⚠️  Could not find original listing event for punk ${listing.punkId}`)
+        }
+      } catch (fetchError: any) {
+        console.error(`   ⚠️  Failed to fetch listing event:`, fetchError)
+      }
 
       const soldEventTemplate = {
         kind: KIND_PUNK_SOLD,
@@ -210,18 +244,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           ['buyer', listing.buyerPubkey!],
           ['price', listing.price],
           ['txid', paymentTxid],
-          ['network', currentNetwork]
+          ['network', currentNetwork],
+          ...(compressedMetadata ? [['compressed', compressedMetadata]] : [])
         ],
         content: `Punk ${listing.punkId} sold via escrow for ${listing.price} sats`
       }
 
       const signedSoldEvent = finalizeEvent(soldEventTemplate, hex.decode(ESCROW_PRIVATE_KEY))
 
-      const pool = new SimplePool()
       await Promise.any(pool.publish(RELAYS, signedSoldEvent))
       pool.close(RELAYS)
 
-      console.log(`✅ Sold event published to Nostr!`)
+      console.log(`✅ Sold event published to Nostr!${compressedMetadata ? ' (with metadata)' : ' (without metadata)'}`)
     } catch (soldEventError: any) {
       console.error('⚠️ Failed to publish sold event:', soldEventError)
       // Don't fail the whole transaction if Nostr fails
