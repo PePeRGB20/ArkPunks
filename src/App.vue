@@ -956,15 +956,11 @@ async function listPunk(punk: PunkState) {
       // Update local state
       listedPunkIds.value.add(punk.punkId)
 
-      // If escrow mode, mark punk as in escrow
+      // If escrow mode, refresh gallery to sync escrow state from blob
       if (saleMode === 'escrow') {
-        const punkIndex = allPunks.value.findIndex(p => p.punkId === punk.punkId)
-        if (punkIndex !== -1) {
-          allPunks.value[punkIndex].inEscrow = true
-          allPunks.value[punkIndex].listingPrice = BigInt(price)
-          localStorage.setItem('arkade_punks', JSON.stringify(allPunks.value))
-          console.log(`✅ Marked punk ${punk.punkId.slice(0, 8)}... as in escrow`)
-        }
+        console.log('🔄 Refreshing gallery to sync escrow state from blob...')
+        await refreshGallery()
+        console.log('✅ Gallery refreshed - punk should now show as in escrow')
       }
     } else {
       alert('❌ Failed to list punk. Check console for details.')
