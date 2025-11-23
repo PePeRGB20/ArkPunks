@@ -456,7 +456,8 @@ async function buyPunk(punk: MarketplaceListing) {
 
           const executeResponse = await executeEscrowSwap({
             punkId: punk.punkId,
-            buyerPubkey
+            buyerPubkey,
+            buyerArkAddress
           })
 
           console.log('✅ Swap executed:', executeResponse)
@@ -464,8 +465,8 @@ async function buyPunk(punk: MarketplaceListing) {
           alert(
             `🎉 Purchase complete!\n\n` +
             `${punk.metadata.name} is now yours!\n\n` +
-            `Punk Transfer: ${executeResponse.punkTxid.slice(0, 16)}...\n` +
             `Payment Transfer: ${executeResponse.paymentTxid.slice(0, 16)}...\n\n` +
+            `Seller will send you the punk VTXO shortly.\n` +
             `Refresh the page to see your new punk!`
           )
 
