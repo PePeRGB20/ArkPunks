@@ -3,8 +3,11 @@
  *
  * POST /api/escrow/update-outpoint
  *
- * Updates the VTXO outpoint for an escrow listing after the punk has been sent to escrow.
- * This is necessary because wallet.send() creates a new VTXO with a new outpoint.
+ * Updates the VTXO outpoint for an escrow listing after collateral has been sent.
+ *
+ * DESIGN NOTE: VTXOs are fungible - any ~10k sat VTXO can be used as punk collateral.
+ * The seller sends ANY available punk-sized VTXO to escrow, and this endpoint records
+ * which VTXO was actually received so escrow can return it later.
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'

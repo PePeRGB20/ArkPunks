@@ -819,104 +819,70 @@ async function listPunk(punk: PunkState) {
         return
       }
 
-      // Get all VTXOs to find the punk VTXO value
-      console.log('📋 Finding punk VTXO...')
-      console.log(`   Looking for outpoint: ${punk.vtxoOutpoint}`)
+      // Find ANY available punk-sized VTXO to send to escrow
+      // NOTE: Punks are tracked by Nostr, not by specific VTXO
+      // VTXOs are just 10k sat collateral - they're fungible
+      console.log('📋 Finding a punk-sized VTXO to send to escrow...')
+      console.log('   (Punks are tracked by Nostr, VTXOs are fungible collateral)')
 
       const allVtxos = await wallet.getVtxos()
-      console.log(`   Available VTXOs (${allVtxos.length}):`)
-      allVtxos.forEach((v, i) => {
-        const outpoint = `${v.txid}:${v.vout}`
-        console.log(`      ${i + 1}. ${outpoint} (${v.value} sats)`)
-      })
+      console.log(`   Available VTXOs: ${allVtxos.length}`)
 
-      // Try to find by exact outpoint first
-      let punkVtxo = allVtxos.find(v => `${v.txid}:${v.vout}` === punk.vtxoOutpoint)
+      // Find any punk-sized VTXO (between 9,900 and 10,200 sats)
+      const punkSizedVtxos = allVtxos.filter(v => v.value >= 9900 && v.value <= 10200)
+      console.log(`   Found ${punkSizedVtxos.length} punk-sized VTXO(s)`)
 
-      // If not found by outpoint (may have changed due to Arkade round),
-      // try to find by value (punk VTXOs are typically ~9,990-10,100 sats)
-      if (!punkVtxo) {
-        console.warn('⚠️ Exact VTXO outpoint not found, searching by value...')
-
-        // Find all punk-sized VTXOs (between 9,900 and 10,200 sats)
-        const punkSizedVtxos = allVtxos.filter(v => v.value >= 9900 && v.value <= 10200)
-        console.log(`   Found ${punkSizedVtxos.length} punk-sized VTXO(s)`)
-
-        if (punkSizedVtxos.length === 0) {
-          console.error('❌ No punk-sized VTXOs found!')
-          alert(
-            `❌ Error: Could not find any punk VTXO in your wallet.\n\n` +
-            `Expected: ~10,000 sats VTXO\n` +
-            `Available VTXOs: ${allVtxos.length}\n\n` +
-            `You may need to refresh your wallet or sync punks from Nostr.`
-          )
-          return
-        }
-
-        if (punkSizedVtxos.length === 1) {
-          // Only one punk-sized VTXO, use it
-          punkVtxo = punkSizedVtxos[0]
-          const newOutpoint = `${punkVtxo.txid}:${punkVtxo.vout}`
-          console.log(`   📍 Using punk-sized VTXO: ${newOutpoint} (${punkVtxo.value} sats)`)
-
-          // Update punk outpoint for future operations
-          punk.vtxoOutpoint = newOutpoint
-        } else {
-          // Multiple punk-sized VTXOs - ask user to select
-          console.error('❌ Multiple punk-sized VTXOs found!')
-          alert(
-            `❌ Error: Found ${punkSizedVtxos.length} possible punk VTXOs.\n\n` +
-            `This happens when you have multiple punks.\n\n` +
-            `Please sync your punks from Nostr first to refresh the outpoints:\n` +
-            `1. Go to Gallery tab\n` +
-            `2. Click "Sync from Nostr"\n` +
-            `3. Then try listing again`
-          )
-          return
-        }
-      } else {
-        console.log(`   ✅ Found exact match: ${punkVtxo.value} sats at ${punkVtxo.txid}:${punkVtxo.vout}`)
+      if (punkSizedVtxos.length === 0) {
+        console.error('❌ No punk-sized VTXOs found!')
+        alert(
+          `❌ Error: No punk collateral found in your wallet.\n\n` +
+          `To list a punk in escrow, you need at least one VTXO of ~10,000 sats.\n\n` +
+          `Available VTXOs: ${allVtxos.length}\n` +
+          `Try refreshing your wallet or minting a punk first.`
+        )
+        return
       }
 
-      // Send punk VTXO to escrow address
-      console.log(`📤 Sending punk VTXO to escrow address: ${escrowAddress}`)
+      // Use the first available punk-sized VTXO
+      const punkVtxo = punkSizedVtxos[0]
+      const vtxoOutpoint = `${punkVtxo.txid}:${punkVtxo.vout}`
+      console.log(`   ✅ Using VTXO: ${vtxoOutpoint} (${punkVtxo.value} sats)`)
 
-      let newVtxoOutpoint = punk.vtxoOutpoint
+      // Send punk collateral to escrow address
+      console.log(`📤 Sending ${punkVtxo.value} sats to escrow: ${escrowAddress}`)
 
       try {
         const txid = await wallet.send(escrowAddress, BigInt(punkVtxo.value))
-        console.log(`✅ Punk sent to escrow! Txid: ${txid}`)
+        console.log(`✅ Collateral sent to escrow! Txid: ${txid}`)
 
-        // The new VTXO outpoint will be txid:0 (recipient gets vout 0)
-        newVtxoOutpoint = `${txid}:0`
-        console.log(`   New VTXO outpoint: ${newVtxoOutpoint}`)
+        // The escrow will receive the VTXO at txid:0 (recipient gets vout 0)
+        const escrowVtxoOutpoint = `${txid}:0`
+        console.log(`   Escrow will receive VTXO at: ${escrowVtxoOutpoint}`)
 
-        // Update escrow storage with the new outpoint
-        console.log('📡 Updating escrow storage with new outpoint...')
+        // Notify escrow about the VTXO we sent
+        console.log('📡 Updating escrow with received VTXO outpoint...')
         const { updateEscrowOutpoint } = await import('./utils/escrowApi')
-        await updateEscrowOutpoint(punk.punkId, newVtxoOutpoint)
-        console.log('✅ Escrow storage updated with new outpoint')
+        await updateEscrowOutpoint(punk.punkId, escrowVtxoOutpoint)
+        console.log('✅ Escrow updated successfully')
 
         alert(
           `✅ Success!\n\n` +
-          `${punk.metadata.name} has been sent to escrow.\n\n` +
+          `${punk.metadata.name} has been listed in escrow.\n\n` +
+          `Collateral sent: ${punkVtxo.value.toLocaleString()} sats\n` +
           `Transaction ID: ${txid}\n\n` +
           `Your listing is now active in the marketplace!\n` +
           `The punk will show as "🛡️ In Escrow" (grayed out) in your gallery.\n\n` +
           `When a buyer purchases it, you'll receive ${price.toLocaleString()} sats automatically.`
         )
       } catch (sendError: any) {
-        console.error('❌ Failed to send punk to escrow:', sendError)
+        console.error('❌ Failed to send collateral to escrow:', sendError)
         alert(
-          `⚠️ Listing created but failed to send punk to escrow:\n\n` +
+          `⚠️ Listing created but failed to send collateral to escrow:\n\n` +
           `${sendError?.message || sendError}\n\n` +
           `Please try listing again.`
         )
         return
       }
-
-      // Update the vtxo outpoint to use the new one after escrow transfer
-      punk.vtxoOutpoint = newVtxoOutpoint
     }
 
     // Publish listing to Nostr

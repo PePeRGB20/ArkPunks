@@ -4,7 +4,10 @@
  * POST /api/escrow/list
  *
  * Allows a seller to list their punk in escrow mode.
- * Returns the escrow address where the seller must send their punk VTXO.
+ * Returns the escrow address where the seller must send punk collateral (~10k sats).
+ *
+ * DESIGN NOTE: VTXOs are fungible collateral, not tied to specific punks.
+ * Punk ownership is tracked by Nostr events. VTXOs just prove 10k sats are locked.
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
