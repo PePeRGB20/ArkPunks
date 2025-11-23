@@ -830,22 +830,53 @@ async function listPunk(punk: PunkState) {
         console.log(`      ${i + 1}. ${outpoint} (${v.value} sats)`)
       })
 
-      const punkVtxo = allVtxos.find(v => `${v.txid}:${v.vout}` === punk.vtxoOutpoint)
+      // Try to find by exact outpoint first
+      let punkVtxo = allVtxos.find(v => `${v.txid}:${v.vout}` === punk.vtxoOutpoint)
 
+      // If not found by outpoint (may have changed due to Arkade round),
+      // try to find by value (punk VTXOs are typically ~9,990-10,100 sats)
       if (!punkVtxo) {
-        console.error('❌ Punk VTXO not found!')
-        console.error(`   Expected: ${punk.vtxoOutpoint}`)
-        alert(
-          `❌ Error: Could not find punk VTXO in your wallet.\n\n` +
-          `Expected outpoint: ${punk.vtxoOutpoint}\n\n` +
-          `This punk may have been affected by an Arkade round.\n` +
-          `Available VTXOs: ${allVtxos.length}\n\n` +
-          `Please try syncing your punks from Nostr to refresh the outpoints.`
-        )
-        return
-      }
+        console.warn('⚠️ Exact VTXO outpoint not found, searching by value...')
 
-      console.log(`   ✅ Found punk VTXO: ${punkVtxo.value} sats at ${punkVtxo.txid}:${punkVtxo.vout}`)
+        // Find all punk-sized VTXOs (between 9,900 and 10,200 sats)
+        const punkSizedVtxos = allVtxos.filter(v => v.value >= 9900 && v.value <= 10200)
+        console.log(`   Found ${punkSizedVtxos.length} punk-sized VTXO(s)`)
+
+        if (punkSizedVtxos.length === 0) {
+          console.error('❌ No punk-sized VTXOs found!')
+          alert(
+            `❌ Error: Could not find any punk VTXO in your wallet.\n\n` +
+            `Expected: ~10,000 sats VTXO\n` +
+            `Available VTXOs: ${allVtxos.length}\n\n` +
+            `You may need to refresh your wallet or sync punks from Nostr.`
+          )
+          return
+        }
+
+        if (punkSizedVtxos.length === 1) {
+          // Only one punk-sized VTXO, use it
+          punkVtxo = punkSizedVtxos[0]
+          const newOutpoint = `${punkVtxo.txid}:${punkVtxo.vout}`
+          console.log(`   📍 Using punk-sized VTXO: ${newOutpoint} (${punkVtxo.value} sats)`)
+
+          // Update punk outpoint for future operations
+          punk.vtxoOutpoint = newOutpoint
+        } else {
+          // Multiple punk-sized VTXOs - ask user to select
+          console.error('❌ Multiple punk-sized VTXOs found!')
+          alert(
+            `❌ Error: Found ${punkSizedVtxos.length} possible punk VTXOs.\n\n` +
+            `This happens when you have multiple punks.\n\n` +
+            `Please sync your punks from Nostr first to refresh the outpoints:\n` +
+            `1. Go to Gallery tab\n` +
+            `2. Click "Sync from Nostr"\n` +
+            `3. Then try listing again`
+          )
+          return
+        }
+      } else {
+        console.log(`   ✅ Found exact match: ${punkVtxo.value} sats at ${punkVtxo.txid}:${punkVtxo.vout}`)
+      }
 
       // Send punk VTXO to escrow address
       console.log(`📤 Sending punk VTXO to escrow address: ${escrowAddress}`)
