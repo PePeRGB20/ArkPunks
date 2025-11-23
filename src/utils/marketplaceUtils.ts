@@ -188,8 +188,8 @@ export async function getMarketplaceListings(): Promise<MarketplaceListing[]> {
         // For escrow listings, verify against blob storage to exclude sold/cancelled
         if (saleMode === 'escrow') {
           try {
-            const { getEscrowListing } = await import('./escrowApi')
-            const blobListing = await getEscrowListing(punkId)
+            const { getEscrowStatus } = await import('./escrowApi')
+            const blobListing = await getEscrowStatus(punkId)
 
             if (blobListing && (blobListing.status === 'sold' || blobListing.status === 'cancelled')) {
               console.log(`   ⏭️  Skipping ${blobListing.status} escrow punk: ${punkId.slice(0, 8)}... (blob status: ${blobListing.status})`)
