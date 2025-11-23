@@ -1079,18 +1079,34 @@ async function recoverExpiredVtxos() {
   try {
     console.log('🔄 Recovering expired VTXOs...')
 
-    // Call the wallet's recover method
-    const result = await wallet.recover()
+    // Import VtxoManager from SDK
+    const { VtxoManager } = await import('@arkade-os/sdk')
 
-    console.log('✅ Recovery result:', result)
+    // Create VtxoManager instance
+    const vtxoManager = new VtxoManager(wallet.sdkWallet)
+
+    // Check recoverable balance
+    const recoverableBalance = await vtxoManager.getRecoverableBalance()
+    console.log(`   Recoverable balance: ${recoverableBalance} sats`)
+
+    if (recoverableBalance === 0) {
+      alert('No recoverable VTXOs found.')
+      return
+    }
+
+    // Recover VTXOs
+    const txid = await vtxoManager.recoverVtxos()
+
+    console.log('✅ Recovery txid:', txid)
 
     // Refresh wallet info
     await refreshBalance()
 
     alert(
       `✅ VTXOs Recovered Successfully!\n\n` +
-      `Your expired VTXOs have been recovered and are now usable.\n` +
-      `You can now mint punks or send sats normally.`
+      `Recovered ${recoverableBalance} sats\n` +
+      `Transaction: ${txid}\n\n` +
+      `Your VTXOs are now usable. You can mint punks or send sats normally.`
     )
   } catch (error: any) {
     console.error('❌ Failed to recover VTXOs:', error)
