@@ -258,7 +258,9 @@ async function loadPunks() {
 
           if (punksRemoved > 0) {
             // Update localStorage
-            localStorage.setItem('arkade_punks', JSON.stringify(punks))
+            localStorage.setItem('arkade_punks', JSON.stringify(punks, (key, value) =>
+              typeof value === 'bigint' ? value.toString() : value
+            ))
           }
         }
       }
@@ -275,7 +277,9 @@ async function loadPunks() {
       // If we found duplicates, clean up localStorage
       if (uniquePunks.length < punks.length) {
         console.warn(`⚠️ Found ${punks.length - uniquePunks.length} duplicate punks in localStorage, cleaning up...`)
-        localStorage.setItem('arkade_punks', JSON.stringify(uniquePunks))
+        localStorage.setItem('arkade_punks', JSON.stringify(uniquePunks, (key, value) =>
+          typeof value === 'bigint' ? value.toString() : value
+        ))
       }
 
       allPunks.value = uniquePunks.map((data: any) => ({
@@ -313,7 +317,9 @@ async function loadPunksFromLocalStorage() {
       // If we found duplicates, clean up localStorage
       if (uniquePunks.length < punks.length) {
         console.warn(`⚠️ Found ${punks.length - uniquePunks.length} duplicate punks in localStorage (Nostr sync), cleaning up...`)
-        localStorage.setItem('arkade_punks', JSON.stringify(uniquePunks))
+        localStorage.setItem('arkade_punks', JSON.stringify(uniquePunks, (key, value) =>
+          typeof value === 'bigint' ? value.toString() : value
+        ))
       }
 
       allPunks.value = uniquePunks.map((data: any) => {
@@ -451,7 +457,9 @@ async function refreshGallery() {
       // IMPORTANT: Nostr is the ONLY source of truth
       // Replace localStorage entirely with Nostr data (no merge!)
       // This prevents "phantom punks" on different devices
-      localStorage.setItem('arkade_punks', JSON.stringify(nostrPunks))
+      localStorage.setItem('arkade_punks', JSON.stringify(nostrPunks, (key, value) =>
+        typeof value === 'bigint' ? value.toString() : value
+      ))
 
       // Count changes
       added = nostrPunks.filter(np =>
@@ -623,7 +631,9 @@ async function delistPunkFromMarket(punk: PunkState) {
         if (punkIndex !== -1) {
           allPunks.value[punkIndex].inEscrow = false
           allPunks.value[punkIndex].listingPrice = 0n
-          localStorage.setItem('arkade_punks', JSON.stringify(allPunks.value))
+          localStorage.setItem('arkade_punks', JSON.stringify(allPunks.value, (key, value) =>
+            typeof value === 'bigint' ? value.toString() : value
+          ))
           console.log(`✅ Cleared escrow flag for punk ${punk.punkId.slice(0, 8)}...`)
         }
       }
@@ -723,7 +733,9 @@ async function transferPunk(punk: PunkState) {
     if (punksJson) {
       const punks = JSON.parse(punksJson)
       const updatedPunks = punks.filter((p: any) => p.punkId !== punk.punkId)
-      localStorage.setItem('arkade_punks', JSON.stringify(updatedPunks))
+      localStorage.setItem('arkade_punks', JSON.stringify(updatedPunks, (key, value) =>
+        typeof value === 'bigint' ? value.toString() : value
+      ))
     }
 
     // Reload gallery

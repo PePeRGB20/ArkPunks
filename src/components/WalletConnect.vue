@@ -671,7 +671,9 @@ async function handleFileImport(event: Event) {
         }
       })
 
-      localStorage.setItem('arkade_punks', JSON.stringify(punksToSave))
+      localStorage.setItem('arkade_punks', JSON.stringify(punksToSave, (key, value) =>
+        typeof value === 'bigint' ? value.toString() : value
+      ))
       console.log('✅ Punks restored to localStorage with regenerated images')
     }
 

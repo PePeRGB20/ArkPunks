@@ -487,7 +487,9 @@ async function mint() {
         owner: currentWallet.address,
         vtxoOutpoint: `${txid}:0`
       })
-      localStorage.setItem('arkade_punks', JSON.stringify(punks))
+      localStorage.setItem('arkade_punks', JSON.stringify(punks, (key, value) =>
+        typeof value === 'bigint' ? value.toString() : value
+      ))
     }
 
     // 5. Publish to Nostr relays

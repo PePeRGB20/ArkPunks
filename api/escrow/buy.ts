@@ -55,10 +55,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       })
     }
 
-    // Get escrow listing
-    const listing = await getEscrowListing(punkId)
+    // Get escrow listing with retry logic for blob propagation
+    console.log('   📋 Checking if listing exists (with retry for blob propagation)...')
+    let listing = null
+    const maxAttempts = 5
+    const baseDelay = 200 // ms
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      listing = await getEscrowListing(punkId)
+
+      if (listing) {
+        console.log(`   ✅ Found listing on attempt ${attempt}`)
+        break
+      }
+
+      if (attempt < maxAttempts) {
+        const delay = baseDelay * Math.pow(2, attempt - 1) // Exponential backoff
+        console.log(`   ⏳ Attempt ${attempt}/${maxAttempts} - Listing not found yet, retrying in ${delay}ms...`)
+        await new Promise(resolve => setTimeout(resolve, delay))
+      }
+    }
+
     if (!listing) {
-      return res.status(404).json({ error: 'Punk not found in escrow' })
+      console.error(`   ❌ Listing not found after ${maxAttempts} attempts`)
+      return res.status(404).json({
+        error: 'Punk not found in escrow',
+        details: `No escrow listing found for punk ${punkId} after ${maxAttempts} retry attempts. The listing may not exist or blob propagation is delayed.`,
+        punkId
+      })
     }
 
     // Check listing status
