@@ -230,26 +230,30 @@
 
       <!-- Lightning Swaps Section (hidden in production) -->
       <div v-if="lightningEnabled" class="lightning-section">
-        <h4 class="lightning-title">⚡ Lightning Swaps</h4>
-        <div class="lightning-tabs">
-          <button
-            @click="lightningTab = 'receive'"
-            :class="{ active: lightningTab === 'receive' }"
-            class="lightning-tab-button"
-          >
-            📥 Receive
-          </button>
-          <button
-            @click="lightningTab = 'send'"
-            :class="{ active: lightningTab === 'send' }"
-            class="lightning-tab-button"
-          >
-            📤 Send
-          </button>
+        <div class="troubleshooting-header" @click="showLightning = !showLightning">
+          <span class="label">⚡ Lightning Swaps</span>
+          <span class="toggle-icon">{{ showLightning ? '▼' : '▶' }}</span>
         </div>
+        <div v-if="showLightning" class="lightning-content">
+          <div class="lightning-tabs">
+            <button
+              @click="lightningTab = 'receive'"
+              :class="{ active: lightningTab === 'receive' }"
+              class="lightning-tab-button"
+            >
+              📥 Receive
+            </button>
+            <button
+              @click="lightningTab = 'send'"
+              :class="{ active: lightningTab === 'send' }"
+              class="lightning-tab-button"
+            >
+              📤 Send
+            </button>
+          </div>
 
-        <!-- Receive Tab -->
-        <div v-if="lightningTab === 'receive'" class="lightning-tab-content">
+          <!-- Receive Tab -->
+          <div v-if="lightningTab === 'receive'" class="lightning-tab-content">
           <div v-if="!lightningReceiveInvoice" class="lightning-form">
             <div class="form-group">
               <label>Amount (sats)</label>
@@ -342,6 +346,7 @@
               Pay Another Invoice
             </button>
           </div>
+        </div>
         </div>
       </div>
 
@@ -503,6 +508,7 @@ const punkBalanceTrigger = ref(0) // Reactive trigger to force punkLockedBalance
 const syncing = ref(false) // Reserve sync in progress
 const recovering = ref(false) // VTXO recovery in progress
 const showTroubleshooting = ref(false) // Show troubleshooting section
+const showLightning = ref(false) // Show Lightning section
 
 // Lightning state
 const lightningTab = ref<'receive' | 'send'>('receive')
