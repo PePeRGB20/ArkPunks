@@ -367,41 +367,56 @@ export async function createArkadeWallet(
       },
       checkAndRenewVtxos: async () => {
         try {
-          console.log('🔍 Checking for expiring VTXOs...')
+          console.log('🔍 Checking for expired VTXOs...')
 
           // Import VtxoManager from SDK
           const { VtxoManager } = await import('@arkade-os/sdk')
 
-          // Create VtxoManager with 10% threshold (recommended by Arkade docs)
-          const vtxoManager = new VtxoManager(wallet, {
-            thresholdPercentage: 10
-          })
+          // Create VtxoManager
+          const vtxoManager = new VtxoManager(wallet)
 
-          // Check for expiring VTXOs
-          const expiringVtxos = await vtxoManager.getExpiringVtxos()
+          // For truly expired/swept VTXOs, use recoverVtxos()
+          // This is what the Arkade devs recommend for expired VTXOs
+          const allVtxos = await wallet.getVtxos()
+          const sweptVtxos = allVtxos.filter((v: any) =>
+            v.virtualStatus?.state === 'swept' && !v.isSpent
+          )
 
-          if (expiringVtxos.length > 0) {
-            console.log(`🔄 Found ${expiringVtxos.length} expiring VTXO(s), renewing...`)
+          if (sweptVtxos.length > 0) {
+            console.log(`🔄 Found ${sweptVtxos.length} swept VTXO(s), recovering...`)
 
-            // Renew expiring VTXOs
-            const txid = await vtxoManager.renewVtxos()
+            try {
+              // Use recoverVtxos() for swept/expired VTXOs
+              const txid = await vtxoManager.recoverVtxos()
 
-            console.log(`✅ VTXOs renewed! Txid: ${txid}`)
+              console.log(`✅ VTXOs recovered! Txid: ${txid}`)
 
-            return {
-              renewed: true,
-              txid,
-              expiringCount: expiringVtxos.length
+              return {
+                renewed: true,
+                txid,
+                expiringCount: sweptVtxos.length
+              }
+            } catch (recoverError: any) {
+              // If recovery fails due to dust threshold, just log it
+              // These tiny VTXOs aren't worth recovering anyway
+              if (recoverError.message?.includes('dust threshold')) {
+                console.warn(`⚠️ Swept VTXOs too small to recover (below dust threshold)`)
+                return {
+                  renewed: false,
+                  expiringCount: 0
+                }
+              }
+              throw recoverError
             }
           }
 
-          console.log('✅ No VTXOs need renewal')
+          console.log('✅ No expired VTXOs need recovery')
           return {
             renewed: false,
             expiringCount: 0
           }
         } catch (error) {
-          console.error('❌ VTXO renewal failed:', error)
+          console.error('❌ VTXO recovery failed:', error)
           return {
             renewed: false,
             expiringCount: 0
