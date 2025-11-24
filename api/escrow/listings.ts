@@ -74,19 +74,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.error('❌ Error fetching listings:', error)
     console.error('   Full error:', error)
 
-    // If Vercel Blob is not configured, return empty listings
-    if (error.message?.includes('Vercel Blob not configured') ||
-        error.message?.includes('BLOB_READ_WRITE_TOKEN')) {
-      console.log('⚠️ Vercel Blob not configured, returning empty listings')
-      return res.status(200).json({
-        success: true,
-        listings: []
-      })
-    }
-
-    return res.status(500).json({
-      error: 'Failed to fetch listings',
-      details: error.message
+    // Return empty listings gracefully instead of crashing
+    // This handles: blob not configured, empty store, parsing errors, etc.
+    console.log('⚠️ Returning empty listings due to error')
+    return res.status(200).json({
+      success: true,
+      listings: [],
+      error: error.message // Include error for debugging
     })
   }
 }
