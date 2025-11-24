@@ -926,17 +926,18 @@ async function createNewWallet() {
     saveIdentity(identity)
 
     wallet = await createArkadeWallet(identity)
-    await updateWalletInfo()
 
-    connected.value = true
-
-    // Auto-renew expiring VTXOs (for new wallet, likely none, but good practice)
-    console.log('🔄 Checking for expiring VTXOs after wallet creation...')
+    // Auto-renew expiring VTXOs IMMEDIATELY after wallet creation
+    // BEFORE calling any other methods (for new wallet, likely none, but good practice)
+    console.log('🔄 Checking for expiring VTXOs after wallet creation (BEFORE any other operations)...')
     const renewalResult = await wallet.checkAndRenewVtxos()
     if (renewalResult.renewed) {
       console.log(`✅ Renewed ${renewalResult.expiringCount} VTXO(s)`)
-      await updateWalletInfo()
     }
+
+    // Now update wallet info (calls getBalance, getVtxos, etc.)
+    await updateWalletInfo()
+    connected.value = true
   } catch (error) {
     console.error('Failed to create wallet:', error)
     alert('Failed to create wallet. See console for details.')
@@ -963,6 +964,16 @@ async function doImport() {
     saveIdentity(identity)
 
     wallet = await createArkadeWallet(identity)
+
+    // Auto-renew expiring VTXOs IMMEDIATELY after wallet creation
+    // BEFORE calling any other methods (especially important for imported wallets with existing VTXOs)
+    console.log('🔄 Checking for expiring VTXOs after wallet import (BEFORE any other operations)...')
+    const renewalResult = await wallet.checkAndRenewVtxos()
+    if (renewalResult.renewed) {
+      console.log(`✅ Renewed ${renewalResult.expiringCount} VTXO(s)`)
+    }
+
+    // Now update wallet info (calls getBalance, getVtxos, etc.)
     await updateWalletInfo()
 
     connected.value = true
@@ -1038,6 +1049,16 @@ async function handleFileImport(event: Event) {
     }
 
     wallet = await createArkadeWallet(identity)
+
+    // Auto-renew expiring VTXOs IMMEDIATELY after wallet creation
+    // BEFORE calling any other methods (especially important for imported wallets with existing VTXOs)
+    console.log('🔄 Checking for expiring VTXOs after wallet import (BEFORE any other operations)...')
+    const renewalResult = await wallet.checkAndRenewVtxos()
+    if (renewalResult.renewed) {
+      console.log(`✅ Renewed ${renewalResult.expiringCount} VTXO(s)`)
+    }
+
+    // Now update wallet info (calls getBalance, getVtxos, etc.)
     await updateWalletInfo()
 
     connected.value = true
@@ -1985,17 +2006,19 @@ onMounted(async () => {
     loading.value = true
     try {
       wallet = await createArkadeWallet(identity)
-      await updateWalletInfo()
-      connected.value = true
 
-      // Auto-renew expiring VTXOs on startup
-      console.log('🔄 Checking for expiring VTXOs on startup...')
+      // Auto-renew expiring VTXOs IMMEDIATELY after wallet creation
+      // BEFORE calling any other methods (getBalance, getVtxos, etc.)
+      // This follows Arkade CEO's advice: "just load the Wallet instance and then call renewVtxos()"
+      console.log('🔄 Checking for expiring VTXOs on startup (BEFORE any other operations)...')
       const renewalResult = await wallet.checkAndRenewVtxos()
       if (renewalResult.renewed) {
         console.log(`✅ Renewed ${renewalResult.expiringCount} VTXO(s) on startup`)
-        // Refresh balance after renewal
-        await updateWalletInfo()
       }
+
+      // Now update wallet info (calls getBalance, getVtxos, etc.)
+      await updateWalletInfo()
+      connected.value = true
     } catch (error) {
       console.error('Failed to restore wallet:', error)
       clearIdentity()
