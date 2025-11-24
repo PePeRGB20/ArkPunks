@@ -372,8 +372,11 @@ export async function createArkadeWallet(
           // Import VtxoManager from SDK
           const { VtxoManager } = await import('@arkade-os/sdk')
 
-          // Create VtxoManager
-          const vtxoManager = new VtxoManager(wallet)
+          // Create VtxoManager with configuration (as recommended by Arkade CEO)
+          const vtxoManager = new VtxoManager(wallet, {
+            enabled: true,           // Enable expiration monitoring
+            thresholdPercentage: 10  // Alert when 10% of lifetime remains
+          })
 
           // Get all VTXOs to check which ones need renewal
           const allVtxos = await wallet.getVtxos()

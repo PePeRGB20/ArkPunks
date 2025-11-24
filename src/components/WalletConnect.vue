@@ -1158,7 +1158,10 @@ async function sendSats() {
       try {
         // Import VtxoManager
         const { VtxoManager } = await import('@arkade-os/sdk')
-        const vtxoManager = new VtxoManager(wallet.sdkWallet)
+        const vtxoManager = new VtxoManager(wallet.sdkWallet, {
+          enabled: true,           // Enable expiration monitoring
+          thresholdPercentage: 10  // Alert when 10% of lifetime remains
+        })
 
         let renewalSuccess = false
 
@@ -1270,7 +1273,10 @@ async function forceRecoverVtxos() {
     // Step 3: Try to renew VTXOs (Arkade CEO recommendation)
     console.log('🔄 Attempting to renew VTXOs with VtxoManager...')
     const { VtxoManager } = await import('@arkade-os/sdk')
-    const vtxoManager = new VtxoManager(wallet.sdkWallet)
+    const vtxoManager = new VtxoManager(wallet.sdkWallet, {
+      enabled: true,           // Enable expiration monitoring
+      thresholdPercentage: 10  // Alert when 10% of lifetime remains
+    })
 
     try {
       // First try renewVtxos() - this is what Arkade CEO recommends
