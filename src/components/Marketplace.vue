@@ -25,7 +25,7 @@
 
     <div v-if="loading" class="loading-state">
       <div class="spinner"></div>
-      <p>Loading listings from Nostr...</p>
+      <p>Loading listings from escrow...</p>
     </div>
 
     <div v-else-if="listedPunks.length === 0" class="empty-state">
@@ -164,11 +164,16 @@
 <script setup lang="ts">
 import { ref, onMounted, inject, computed } from 'vue'
 import type { ArkadeWalletInterface } from '@/utils/arkadeWallet'
-import { getMarketplaceListings, publishPunkSold, delistPunk } from '@/utils/marketplaceUtils'
+import { delistPunk } from '@/utils/marketplaceUtils'
 import { getOfficialPunksList } from '@/utils/officialPunkValidator'
 import { buyPunkFromEscrow, executeEscrowSwap, cancelEscrowListing } from '@/utils/escrowApi'
+import { decompressPunkMetadata } from '@/utils/compression'
+import { generatePunkImage } from '@/utils/generator'
 import { getPublicKey } from 'nostr-tools'
 import { hex } from '@scure/base'
+
+// API URL (dynamically determined from current location)
+const API_URL = window.location.origin
 
 // Maintenance mode - set to true to enable maintenance banner
 const isMaintenanceMode = import.meta.env.VITE_MARKETPLACE_MAINTENANCE === 'true'
@@ -305,8 +310,21 @@ function previousPage() {
 async function loadListings() {
   loading.value = true
   try {
-    // Get all listed punks from Nostr
-    const listings = await getMarketplaceListings()
+    console.log('📋 Loading listings from escrow blob...')
+
+    // Get all active listings from escrow blob
+    const response = await fetch(`${API_URL}/api/escrow/listings`)
+    if (!response.ok) {
+      throw new Error(`Failed to fetch listings: ${response.statusText}`)
+    }
+
+    const data = await response.json()
+
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to fetch listings')
+    }
+
+    console.log(`✅ Loaded ${data.listings.length} active listings from escrow`)
 
     // Get official punks list
     const { punkIds: officialIds } = await getOfficialPunksList()
@@ -315,12 +333,51 @@ async function loadListings() {
       officialMap.set(id, index)
     })
 
-    // Add official status to listings
-    listedPunks.value = listings.map(listing => ({
-      ...listing,
-      isOfficial: officialMap.has(listing.punkId),
-      officialIndex: officialMap.get(listing.punkId)
-    }))
+    // Convert escrow listings to marketplace format
+    const listings: MarketplaceListing[] = []
+
+    for (const listing of data.listings) {
+      // Decompress metadata if available
+      let metadata
+      if (listing.compressedMetadata) {
+        try {
+          const compressedData = new Uint8Array(
+            listing.compressedMetadata.match(/.{1,2}/g)!.map((byte: string) => parseInt(byte, 16))
+          )
+          metadata = decompressPunkMetadata(compressedData)
+
+          // Generate image URL from traits
+          const imageUrl = generatePunkImage(
+            metadata.traits.type,
+            metadata.traits.attributes,
+            metadata.traits.background
+          )
+          metadata.imageUrl = imageUrl
+        } catch (error) {
+          console.warn(`Failed to decompress metadata for punk ${listing.punkId}:`, error)
+          continue // Skip this listing if metadata can't be decompressed
+        }
+      } else {
+        console.warn(`No metadata for punk ${listing.punkId}`)
+        continue // Skip this listing if no metadata
+      }
+
+      listings.push({
+        punkId: listing.punkId,
+        owner: listing.sellerPubkey,
+        ownerArkAddress: listing.seller,
+        listingPrice: BigInt(listing.price),
+        vtxoOutpoint: listing.punkVtxoOutpoint,
+        saleMode: 'escrow',
+        escrowAddress: listing.escrowAddress,
+        metadata,
+        isOfficial: officialMap.has(listing.punkId),
+        officialIndex: officialMap.get(listing.punkId)
+      })
+    }
+
+    listedPunks.value = listings
+    console.log(`📊 Final marketplace listings: ${listings.length}`)
 
     // Reset to page 1 when listings are reloaded
     currentPage.value = 1
