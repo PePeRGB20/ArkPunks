@@ -32,11 +32,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       sellerArkAddress
     } = req.body as CancelRequest
 
-    console.log(`   Cancel request: punk ${punkId.slice(0, 8)}...`)
-    console.log(`   Seller: ${sellerArkAddress.slice(0, 20)}...`)
+    console.log(`   Cancel request: punk ${punkId?.slice(0, 8)}...`)
+    console.log(`   Seller pubkey: ${sellerPubkey?.slice(0, 16)}...`)
+    console.log(`   Seller address: ${sellerArkAddress?.slice(0, 20)}...`)
+    console.log(`   Full punkId: ${punkId}`)
 
     // Validate required fields
     if (!punkId || !sellerPubkey || !sellerArkAddress) {
+      console.error(`   ❌ Missing required fields:`)
+      console.error(`      punkId: ${!!punkId}`)
+      console.error(`      sellerPubkey: ${!!sellerPubkey}`)
+      console.error(`      sellerArkAddress: ${!!sellerArkAddress}`)
       return res.status(400).json({
         error: 'Missing required fields',
         required: ['punkId', 'sellerPubkey', 'sellerArkAddress']
@@ -44,9 +50,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Get the listing
+    console.log(`   🔍 Searching for listing with punkId: ${punkId}`)
     const listing = await getEscrowListing(punkId)
 
+    console.log(`   📋 Listing found: ${!!listing}`)
+    if (listing) {
+      console.log(`      Listing status: ${listing.status}`)
+      console.log(`      Listing seller: ${listing.sellerArkAddress?.slice(0, 20)}...`)
+    }
+
     if (!listing) {
+      console.error(`   ❌ Listing not found for punkId: ${punkId}`)
+
+      // Debug: Check what listings exist
+      const { getAllEscrowListings } = await import('./_lib/escrowStore.js')
+      const allListings = await getAllEscrowListings()
+      console.error(`   📊 Total active listings in blob: ${allListings.length}`)
+      if (allListings.length > 0) {
+        console.error(`   📋 Available punk IDs:`)
+        allListings.forEach(l => console.error(`      - ${l.punkId}`))
+      }
+
       return res.status(404).json({
         error: 'Listing not found',
         punkId
