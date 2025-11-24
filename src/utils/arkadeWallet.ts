@@ -378,18 +378,14 @@ export async function createArkadeWallet(
             thresholdPercentage: 10  // Alert when 10% of lifetime remains
           })
 
-          // Get all VTXOs to check which ones need renewal
-          const allVtxos = await wallet.getVtxos()
-          console.log(`   Found ${allVtxos.length} total VTXOs`)
-
-          // Log VTXO states for debugging
-          allVtxos.forEach((v: any, i: number) => {
-            console.log(`   VTXO ${i + 1}: ${v.value} sats, state: ${v.virtualStatus?.state}, expiry: ${new Date(v.virtualStatus?.batchExpiry || 0).toLocaleString()}`)
-          })
+          // IMPORTANT: DO NOT call getVtxos() before renewVtxos()!
+          // Arkade CEO's recommendation: "no need to getVtxos yourself,
+          // just load the Wallet instance and then call renewVtxos()"
+          // The VtxoManager will fetch VTXOs internally as needed.
 
           try {
             // Arkade CEO recommends: Use renewVtxos() to renew expiring VTXOs
-            // The SDK will determine which VTXOs need renewal
+            // The SDK will determine which VTXOs need renewal internally
             console.log('🔄 Attempting to renew expiring VTXOs...')
 
             // Log wallet address to verify we're using the correct wallet
@@ -403,7 +399,7 @@ export async function createArkadeWallet(
             return {
               renewed: true,
               txid,
-              expiringCount: allVtxos.length
+              expiringCount: 0 // We don't know count since we didn't call getVtxos()
             }
           } catch (renewError: any) {
             // If no VTXOs need renewal, that's OK
@@ -424,7 +420,7 @@ export async function createArkadeWallet(
                 return {
                   renewed: true,
                   txid: recoverTxid,
-                  expiringCount: allVtxos.length
+                  expiringCount: 0 // We don't know count since we didn't call getVtxos()
                 }
               } catch (recoverError: any) {
                 console.warn(`⚠️ Recovery failed: ${recoverError.message}`)

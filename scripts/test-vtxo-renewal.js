@@ -46,32 +46,12 @@ try {
   console.log(`✅ Wallet loaded: ${address}`)
   console.log('')
 
-  // Step 2: Get VTXOs
-  console.log('📊 Step 2: Fetching VTXOs...')
-  const vtxos = await wallet.getVtxos()
-  console.log(`   Found ${vtxos.length} VTXOs:`)
+  // IMPORTANT: Following Arkade CEO's recommendation:
+  // "no need to getVtxos yourself, just load the Wallet instance and then call renewVtxos()"
+  // We DO NOT call getVtxos() or getBalance() before renewVtxos()
 
-  vtxos.forEach((v, i) => {
-    const expiry = new Date(v.virtualStatus?.batchExpiry || 0)
-    const now = new Date()
-    const isExpired = expiry < now
-
-    console.log(`   ${i + 1}. ${v.value} sats - ${v.virtualStatus?.state} - expiry: ${expiry.toISOString()} ${isExpired ? '⚠️ EXPIRED' : '✅ OK'}`)
-  })
-  console.log('')
-
-  // Step 3: Get balance
-  console.log('💰 Step 3: Checking balance...')
-  const balance = await wallet.getBalance()
-  console.log(`   Total: ${balance.total} sats`)
-  console.log(`   Available: ${balance.available} sats`)
-  console.log(`   Settled: ${balance.settled} sats`)
-  console.log(`   Preconfirmed: ${balance.preconfirmed} sats`)
-  console.log(`   Recoverable: ${balance.recoverable} sats ${balance.recoverable === 0 ? '⚠️ ZERO (but server may disagree!)' : ''}`)
-  console.log('')
-
-  // Step 4: Try to renew VTXOs
-  console.log('🔄 Step 4: Attempting VTXO renewal...')
+  // Step 2: Try to renew VTXOs
+  console.log('🔄 Step 2: Attempting VTXO renewal (WITHOUT calling getVtxos first)...')
   console.log('   Creating VtxoManager with config:')
   console.log('   - enabled: true')
   console.log('   - thresholdPercentage: 10')
@@ -86,12 +66,20 @@ try {
     console.log('   Calling vtxoManager.renewVtxos()...')
     const txid = await vtxoManager.renewVtxos()
     console.log(`✅ SUCCESS! VTXOs renewed with txid: ${txid}`)
+
+    // Now get balance and VTXOs to show the result
+    console.log('')
+    console.log('📊 After renewal - checking state:')
+    const balance = await wallet.getBalance()
+    const vtxos = await wallet.getVtxos()
+    console.log(`   Total balance: ${balance.total} sats`)
+    console.log(`   VTXOs count: ${vtxos.length}`)
   } catch (renewError) {
     console.error(`❌ renewVtxos() FAILED: ${renewError.message}`)
     console.log('')
 
-    // Step 5: Try to recover VTXOs
-    console.log('🔄 Step 5: Attempting VTXO recovery (fallback)...')
+    // Step 3: Try to recover VTXOs
+    console.log('🔄 Step 3: Attempting VTXO recovery (fallback)...')
     try {
       console.log('   Calling vtxoManager.recoverVtxos()...')
       const recoverTxid = await vtxoManager.recoverVtxos()
@@ -100,8 +88,26 @@ try {
       console.error(`❌ recoverVtxos() FAILED: ${recoverError.message}`)
       console.log('')
 
-      // Step 6: Try to send (to demonstrate VTXO_RECOVERABLE error)
-      console.log('📤 Step 6: Attempting send (to demonstrate VTXO_RECOVERABLE error)...')
+      // Step 4: Get balance and VTXOs for diagnostics
+      console.log('📊 Step 4: Getting balance and VTXOs for diagnostics...')
+      const balance = await wallet.getBalance()
+      const vtxos = await wallet.getVtxos()
+
+      console.log(`   Total: ${balance.total} sats`)
+      console.log(`   Available: ${balance.available} sats`)
+      console.log(`   Recoverable: ${balance.recoverable} sats ${balance.recoverable === 0 ? '⚠️ ZERO (but server may disagree!)' : ''}`)
+      console.log(`   VTXOs count: ${vtxos.length}`)
+
+      vtxos.forEach((v, i) => {
+        const expiry = new Date(v.virtualStatus?.batchExpiry || 0)
+        const now = new Date()
+        const isExpired = expiry < now
+        console.log(`   VTXO ${i + 1}: ${v.value} sats - ${v.virtualStatus?.state} - expiry: ${expiry.toISOString()} ${isExpired ? '⚠️ EXPIRED' : '✅ OK'}`)
+      })
+      console.log('')
+
+      // Step 5: Try to send (to demonstrate VTXO_RECOVERABLE error)
+      console.log('📤 Step 5: Attempting send (to demonstrate VTXO_RECOVERABLE error)...')
       try {
         console.log('   Sending 1000 sats to self...')
         const sendTxid = await wallet.sendBitcoin({
