@@ -5,7 +5,7 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { getAllListingsIncludingSold } from './_lib/escrowStore'
+import { getAllListingsIncludingSold } from './_lib/escrowStore.js'
 
 interface SaleResponse {
   punkId: string
