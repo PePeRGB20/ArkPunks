@@ -1131,8 +1131,61 @@ async function sendSats() {
 
   } catch (error: any) {
     console.error('❌ Send failed:', error)
-    sendStatus.value = `Failed to send: ${error?.message || error}`
-    sendSuccess.value = false
+
+    // Check if error is due to recoverable VTXOs
+    const errorMsg = error?.message || String(error)
+    if (errorMsg.includes('VTXO_RECOVERABLE') || errorMsg.includes('is recoverable')) {
+      console.log('🔄 Detected recoverable VTXO - attempting recovery...')
+      sendStatus.value = '🔄 Recovering VTXOs, please wait...'
+
+      try {
+        // Import VtxoManager
+        const { VtxoManager } = await import('@arkade-os/sdk')
+        const vtxoManager = new VtxoManager(wallet.sdkWallet)
+
+        // Recover VTXOs
+        const recoverTxid = await vtxoManager.recoverVtxos()
+        console.log(`✅ VTXOs recovered! Txid: ${recoverTxid}`)
+
+        // Refresh balance
+        await refreshBalance()
+
+        // Retry send
+        console.log('🔄 Retrying send after recovery...')
+        sendStatus.value = '🔄 Retrying send...'
+
+        const txid = await wallet.send(
+          sendRecipientAddress.value,
+          BigInt(sendAmount.value)
+        )
+
+        console.log('✅ Send successful after recovery!')
+        console.log('   TX ID:', txid)
+
+        sendStatus.value = `✅ Sent ${sendAmount.value} sats successfully!\nTX ID: ${txid.slice(0, 16)}...`
+        sendSuccess.value = true
+
+        // Refresh balance again
+        await refreshBalance()
+
+        // Reset form after 3 seconds
+        setTimeout(() => {
+          sendRecipientAddress.value = ''
+          sendAmount.value = null
+          sendStatus.value = ''
+          showSendModal.value = false
+        }, 3000)
+
+      } catch (recoveryError: any) {
+        console.error('❌ Recovery or retry failed:', recoveryError)
+        sendStatus.value = `Failed to recover VTXOs: ${recoveryError?.message || recoveryError}`
+        sendSuccess.value = false
+      }
+    } else {
+      // Other error
+      sendStatus.value = `Failed to send: ${errorMsg}`
+      sendSuccess.value = false
+    }
   } finally {
     sending.value = false
   }
