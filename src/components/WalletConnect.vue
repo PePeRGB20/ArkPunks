@@ -124,17 +124,9 @@
           </span>
         </div>
 
-        <div class="detail-row">
-          <span class="label">Available for mint:</span>
-          <span class="value">
-            {{ formatSats(availableForMinting) }} sats
-            <span class="mints-available">({{ possibleMints }} {{ possibleMints === 1 ? 'punk' : 'punks' }})</span>
-          </span>
-        </div>
-
-        <div v-if="punkLockedBalance > 0n" class="detail-row">
+        <div v-if="actualLockedBalance > 0n" class="detail-row">
           <span class="label">Locked in punks:</span>
-          <span class="value">{{ formatSats(punkLockedBalance) }} sats</span>
+          <span class="value">{{ formatSats(actualLockedBalance) }} sats</span>
         </div>
 
         <!-- Marketplace reserve info (over-minting bug) -->
@@ -767,6 +759,16 @@ const punkLockedBalance = computed(() => {
     console.error('Failed to calculate punk-locked balance:', error)
     return 0n
   }
+})
+
+// Actual locked balance (can't exceed total balance)
+// If we have 6 punks (60k required) but only 56k total, we can only lock 56k
+const actualLockedBalance = computed(() => {
+  const calculated = punkLockedBalance.value
+  const total = balance.value.total
+
+  // Can't lock more than we have
+  return calculated > total ? total : calculated
 })
 
 // True available balance for minting (excludes punk VTXOs)

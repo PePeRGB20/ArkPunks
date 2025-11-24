@@ -10,9 +10,6 @@
           <button @click="currentView = 'gallery'" :class="{ active: currentView === 'gallery' }">
             Gallery
           </button>
-          <button @click="currentView = 'mint'" :class="{ active: currentView === 'mint' }">
-            Mint
-          </button>
           <button
             v-if="isMarketplaceAvailable"
             @click="currentView = 'marketplace'"
@@ -47,7 +44,7 @@
           </div>
 
           <div v-if="samplePunks.length === 0" class="empty-gallery">
-            <p>No punks yet. Go to Mint section to create your first ArkPunk!</p>
+            <p>No punks yet. Check the Marketplace to buy your first ArkPunk!</p>
           </div>
 
           <div v-else class="punk-grid">
@@ -82,10 +79,6 @@
           </div>
         </div>
 
-        <div v-if="currentView === 'mint'" class="view">
-          <MintPunk />
-        </div>
-
         <div v-if="currentView === 'marketplace' && isMarketplaceAvailable" class="view">
           <Marketplace />
         </div>
@@ -117,7 +110,6 @@
 <script setup lang="ts">
 import { ref, provide, onMounted, onBeforeUnmount, computed, watch } from 'vue'
 import PunkCard from './components/PunkCard.vue'
-import MintPunk from './components/MintPunk.vue'
 import Marketplace from './components/Marketplace.vue'
 import Stats from './components/Stats.vue'
 import WalletConnect from './components/WalletConnect.vue'
@@ -159,7 +151,7 @@ const isMarketplaceAvailable = computed(() => {
   return now >= launchTime
 })
 
-const currentView = ref<'gallery' | 'mint' | 'marketplace' | 'stats' | 'faq'>('gallery')
+const currentView = ref<'gallery' | 'marketplace' | 'stats' | 'faq'>('gallery')
 const selectedPunk = ref<PunkState | null>(null)
 
 // Track which punks are currently listed
