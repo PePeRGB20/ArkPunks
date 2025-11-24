@@ -211,14 +211,12 @@
                     📅 Expires: {{ vtxoExpirationInfo.expiryDate }}<br>
                     ⏱️ Time remaining: {{ vtxoExpirationInfo.timeRemaining }}<br>
                     <br>
-                    <em>Your preconfirmed VTXOs are fully spendable!<br>
-                    They will become "settled" after the next Arkade round (1-2 minutes).</em>
+                    <em>✅ Your preconfirmed VTXOs are fully spendable!</em>
                   </span>
                 </span>
                 <span v-else>
                   <br>
-                  <em>Your preconfirmed VTXOs are fully spendable!<br>
-                  They will transition to "settled" status after the next Arkade round completes.</em>
+                  <em>✅ Your preconfirmed VTXOs are fully spendable!</em>
                 </span>
               </span>
               <span v-else-if="balance.recoverable > 0n">
