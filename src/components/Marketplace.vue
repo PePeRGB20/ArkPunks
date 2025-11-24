@@ -172,8 +172,8 @@ import { generatePunkImage } from '@/utils/generator'
 import { getPublicKey } from 'nostr-tools'
 import { hex } from '@scure/base'
 
-// API URL (dynamically determined from current location)
-const API_URL = window.location.origin
+// API URL - Use local server for development, or window.location.origin for production
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
 // Maintenance mode - set to true to enable maintenance banner
 const isMaintenanceMode = import.meta.env.VITE_MARKETPLACE_MAINTENANCE === 'true'
@@ -310,10 +310,10 @@ function previousPage() {
 async function loadListings() {
   loading.value = true
   try {
-    console.log('📋 Loading listings from escrow blob...')
+    console.log('📋 Loading listings from marketplace server...')
 
-    // Get all active listings from escrow blob
-    const response = await fetch(`${API_URL}/api/escrow/listings`)
+    // Get all active listings from local marketplace server
+    const response = await fetch(`${API_URL}/api/marketplace/listings`)
     if (!response.ok) {
       throw new Error(`Failed to fetch listings: ${response.statusText}`)
     }
@@ -324,7 +324,7 @@ async function loadListings() {
       throw new Error(data.error || 'Failed to fetch listings')
     }
 
-    console.log(`✅ Loaded ${data.listings.length} active listings from escrow`)
+    console.log(`✅ Loaded ${data.listings.length} active listings from marketplace server`)
 
     // Get official punks list
     const { punkIds: officialIds } = await getOfficialPunksList()

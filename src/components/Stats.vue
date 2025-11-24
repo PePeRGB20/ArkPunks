@@ -177,8 +177,8 @@ import { decompressPunkMetadata } from '@/utils/compression'
 import { generatePunkImage, calculateRarityScore } from '@/utils/generator'
 import type { PunkMetadata } from '@/types/punk'
 
-// API URL (dynamically determined from current location)
-const API_URL = window.location.origin
+// API URL - Use local server for development, or window.location.origin for production
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
 interface Sale {
   id: string
@@ -273,10 +273,10 @@ function prevPage() {
 async function loadStats() {
   try {
     loading.value = true
-    console.log('📊 Loading market statistics from escrow API...')
+    console.log('📊 Loading market statistics from marketplace server...')
 
-    // Fetch sales history and stats from escrow API
-    const response = await fetch(`${API_URL}/api/escrow/sales`)
+    // Fetch sales history and stats from marketplace server
+    const response = await fetch(`${API_URL}/api/marketplace/sales`)
     if (!response.ok) {
       throw new Error(`Failed to fetch sales: ${response.statusText}`)
     }
