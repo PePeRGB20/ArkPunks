@@ -415,6 +415,18 @@
             <strong>Total Value:</strong> {{ balance.total }} sats<br>
             <small>All funds are yours - VTXOs represent your Bitcoin locked in Arkade contracts.</small>
           </p>
+
+          <button
+            @click="forceRecoverVtxos"
+            class="btn btn-secondary"
+            :disabled="recoveringVtxos"
+            style="margin-top: 10px; width: 100%;"
+          >
+            {{ recoveringVtxos ? 'Recovering...' : '🔧 Force Recover VTXOs' }}
+          </button>
+          <p v-if="recoveryStatus" class="recovery-status" :class="recoverySuccess ? 'status-success' : 'status-error'">
+            {{ recoveryStatus }}
+          </p>
         </div>
       </div>
 
@@ -660,6 +672,11 @@ const sendAmount = ref<number | null>(null)
 const sending = ref(false)
 const sendStatus = ref('')
 const sendSuccess = ref(false)
+
+// Force recover VTXOs state
+const recoveringVtxos = ref(false)
+const recoveryStatus = ref('')
+const recoverySuccess = ref(false)
 
 // Lightning state
 const lightningTab = ref<'receive' | 'send'>('receive')
@@ -1188,6 +1205,77 @@ async function sendSats() {
     }
   } finally {
     sending.value = false
+  }
+}
+
+async function forceRecoverVtxos() {
+  if (!wallet) {
+    recoveryStatus.value = 'Wallet not connected!'
+    recoverySuccess.value = false
+    return
+  }
+
+  recoveringVtxos.value = true
+  recoveryStatus.value = ''
+  recoverySuccess.value = false
+
+  try {
+    console.log('🔧 Force recovering VTXOs...')
+
+    // Step 1: Get all VTXOs and log their states
+    const allVtxos = await wallet.getRawVtxos?.()
+    console.log(`📊 Found ${allVtxos?.length || 0} VTXOs:`)
+    allVtxos?.forEach((v: any, i: number) => {
+      console.log(`   VTXO ${i + 1}: ${v.txid}:${v.vout}`)
+      console.log(`      Value: ${v.value} sats`)
+      console.log(`      State: ${v.virtualStatus?.state || 'unknown'}`)
+      console.log(`      isSpent: ${v.isSpent}`)
+      console.log(`      Expiry: ${v.virtualStatus?.batchExpiry || 'N/A'}`)
+    })
+
+    // Step 2: Check balance.recoverable
+    const currentBalance = await wallet.getBalance()
+    console.log(`💰 Balance.recoverable: ${currentBalance.recoverable} sats`)
+
+    // Step 3: Try to recover VTXOs
+    console.log('🔄 Attempting recovery with VtxoManager...')
+    const { VtxoManager } = await import('@arkade-os/sdk')
+    const vtxoManager = new VtxoManager(wallet.sdkWallet)
+
+    try {
+      const recoverTxid = await vtxoManager.recoverVtxos()
+      console.log(`✅ VTXOs recovered! Txid: ${recoverTxid}`)
+
+      recoveryStatus.value = `✅ VTXOs recovered successfully!\nTxid: ${recoverTxid.slice(0, 16)}...`
+      recoverySuccess.value = true
+
+      // Refresh balance
+      await refreshBalance()
+
+      // Clear status after 5 seconds
+      setTimeout(() => {
+        recoveryStatus.value = ''
+      }, 5000)
+
+    } catch (recoverError: any) {
+      console.error('❌ Recovery failed:', recoverError)
+
+      // Log detailed error info for debugging
+      console.log('📋 Debug Info for Arkade devs:')
+      console.log('   Error:', recoverError.message)
+      console.log('   All VTXOs:', allVtxos)
+      console.log('   Balance:', currentBalance)
+
+      recoveryStatus.value = `❌ Recovery failed: ${recoverError?.message || recoverError}\n\nCheck console for debug info to send to Arkade devs.`
+      recoverySuccess.value = false
+    }
+
+  } catch (error: any) {
+    console.error('❌ Force recovery error:', error)
+    recoveryStatus.value = `Failed: ${error?.message || error}`
+    recoverySuccess.value = false
+  } finally {
+    recoveringVtxos.value = false
   }
 }
 
@@ -3257,6 +3345,15 @@ h3 {
   background: #2a1a1a;
   border: 2px solid #ff6b35;
   color: #ff6b35;
+}
+
+.recovery-status {
+  margin: 12px 0 0 0;
+  padding: 12px;
+  border-radius: 6px;
+  font-weight: bold;
+  font-size: 13px;
+  white-space: pre-line;
 }
 
 /* Send modal styles */
