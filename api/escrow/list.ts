@@ -110,6 +110,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   } catch (error: any) {
     console.error('❌ Error creating listing:', error)
+
+    // Check for Vercel Blob configuration errors
+    if (error.message?.includes('BLOB_READ_WRITE_TOKEN') ||
+        error.message?.includes('Vercel Blob not configured')) {
+      return res.status(503).json({
+        error: 'Vercel Blob not configured',
+        details: 'BLOB_READ_WRITE_TOKEN environment variable is not set. Please configure Vercel Blob storage in your project settings.',
+        message: 'The escrow system requires Vercel Blob to be configured.'
+      })
+    }
+
     return res.status(500).json({
       error: 'Failed to create listing',
       details: error.message
