@@ -172,7 +172,7 @@ import { getPublicKey } from 'nostr-tools'
 import { hex } from '@scure/base'
 
 // API URL - Use local server for development, or window.location.origin for production
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+const API_URL = import.meta.env.VITE_API_URL || ''
 
 // Maintenance mode - set to true to enable maintenance banner
 const isMaintenanceMode = import.meta.env.VITE_MARKETPLACE_MAINTENANCE === 'true'

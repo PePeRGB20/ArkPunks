@@ -4,7 +4,7 @@
  */
 
 // API URL - uses environment variable or defaults to localhost for dev
-const API_BASE = import.meta.env.VITE_PUNKS_API_URL || 'http://localhost:3001'
+const API_BASE = import.meta.env.VITE_API_URL || ''
 
 /**
  * Check if wallet needs registration

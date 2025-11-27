@@ -219,7 +219,7 @@ async function loadPunks() {
 // DATABASE MIGRATION & LOADING
 // ============================================================
 
-const API_URL = 'http://localhost:3001'
+const API_URL = import.meta.env.VITE_API_URL || ''
 
 /**
  * Check if wallet is registered in database
@@ -565,7 +565,7 @@ async function loadPunksFromLocalStorage() {
       // Sync escrow flags from server database
       try {
         console.log('🔄 Syncing escrow state from server...')
-        const escrowResponse = await fetch('http://localhost:3001/api/escrow/listings')
+        const escrowResponse = await fetch(`${API_URL}/api/escrow/listings`)
         const escrowData = await escrowResponse.json()
         const escrowListings = escrowData.listings || []
 

@@ -617,7 +617,7 @@ import {
 import { handleWalletImport } from '@/services/walletRegistration'
 
 // API URL - Use local server for development, or window.location.origin for production
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+const API_URL = import.meta.env.VITE_API_URL || ''
 
 const config = getActiveConfig()
 const params = getNetworkParams()
